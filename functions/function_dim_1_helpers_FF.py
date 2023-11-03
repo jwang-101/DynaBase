@@ -60,7 +60,7 @@ def normalize_function_FF(F, log_file=sys.stdout):
         F.scale_by(lcm_den)
         base_field = base_field.ring()
         F = F.change_ring(base_field)
-        
+
     if isinstance(base_field, (PolynomialRing_general, MPolynomialRing_base)):
         R = PolynomialRing(base_field.base_ring(), base_field.ngens(), 't')
         phi = base_field.hom(R.gens(), R)
@@ -132,7 +132,7 @@ def check_conjugates_FF(F,G, normalize_base=False, field_type=None, num_paramete
 
     if Kf.degree() > 1:
         raise NotImplementedError('cannot check conjugates for non-prime finite fields')
-        log_file.write('cannot check conjugates for non-prime finite fields: ' + str(list(F)) + ' : ' + str(list(G)) + '\n')    
+        log_file.write('cannot check conjugates for non-prime finite fields: ' + str(list(F)) + ' : ' + str(list(G)) + '\n')
     KFbar = Kf.algebraic_closure()
     Fbar = F.change_ring(KFbar)
     KGbar = Kg.algebraic_closure()
@@ -238,7 +238,7 @@ def conj_in_database_FF(F, sigma_1=None, conj_fns=None, max_sigma=3, compare_mod
         #not in database
         cancel_alarm()
         return 0, []
-        
+
     except AlarmInterrupt:
         log_file.write('timeout: func_in_db: ' + str(timeout) + ':' + polys['val'] + '\n')
         raise
@@ -296,7 +296,7 @@ def add_function_FF(F, citations=[], family=[], keywords=[], action='add', bool_
             log_file.write('Could not add : ' + str(list(F)) + ' because ' + str(base_field) + ' not in database \n')
             raise ValueError("base_field not in database")
     F.normalize_coordinates()
-    
+
     f['base_field_label'] = K_id
     f['base_field_degree'] = int(base_field.degree())
     #f['base_field_emb'] = int(emb_index)
@@ -346,7 +346,7 @@ def add_function_FF(F, citations=[], family=[], keywords=[], action='add', bool_
         f['family'] = None
     else:
         f['family'] = family
-    
+
     #original model
     f['original_model.coeffs'] = [get_coefficients(g) for g in F]
     f['original_model.resultant'] = str(F.resultant())
@@ -355,7 +355,7 @@ def add_function_FF(F, citations=[], family=[], keywords=[], action='add', bool_
     else:
         bad_primes = list(set([p.norm() for p in F.primes_of_bad_reduction()])) #remove duplicates
         bad_primes.sort()
-    f['original_model.bad_primes'] = bad_primes        
+    f['original_model.bad_primes'] = bad_primes
     f['original_model.height'] = float(F.global_height())
     f['original_model.base_field_label'] = f['base_field_label']
     #f['original_model.base_field.degree'] = f['base_field.degree']
@@ -404,7 +404,7 @@ def add_function_FF(F, citations=[], family=[], keywords=[], action='add', bool_
 def add_sigma_inv_FF(label, model_name='original', start=2, end=3, log_file=sys.stdout, timeout=30):
     """
     Compute the sigma invariants for the given function specified either by label.
-    
+
     model specifies which model name to use for computation
 
     action can be add/replace
@@ -428,7 +428,7 @@ def add_sigma_inv_FF(label, model_name='original', start=2, end=3, log_file=sys.
                     log_file.write('function ' + label + 'not found \n')
                     raise ValueError("function not found to update")
                 else:
-                    log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for sigma.' + str(k) + '\n')                        
+                    log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for sigma.' + str(k) + '\n')
             elif k == 3:
                 sigma.update({'three':[str(t) for t in F.sigma_invariants(k)]})
                 my_cursor.execute("""UPDATE functions_dim_1_NF
@@ -439,7 +439,7 @@ def add_sigma_inv_FF(label, model_name='original', start=2, end=3, log_file=sys.
                     log_file.write('function ' + label + 'not found \n')
                     raise ValueError("function not found to update")
                 else:
-                    log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for sigma.' + str(k) + '\n')                        
+                    log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for sigma.' + str(k) + '\n')
             else:
                 raise NotImplementedError("only upto k=3")
 
@@ -554,7 +554,7 @@ def add_rational_preperiodic_points_FF(label, model_name='original', field_label
 def add_is_polynomial_FF(label, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if the map is a polynomial map (totally ramified fixed point)
-    
+
     'is_polynomial'
     """
     if timeout != 0:
@@ -648,7 +648,7 @@ def add_monic_centered_model_FF(label, model_name='original', log_file=sys.stdou
         else:
             bad_primes = list(set([p.norm() for p in G.primes_of_bad_reduction()])) #remove duplicates
             bad_primes.sort()
-        query['monic_centered.bad_primes'] = bad_primes        
+        query['monic_centered.bad_primes'] = bad_primes
         query['monic_centered.height'] = float(G.global_height())
         query['monic_centered.base_field_label'] = L_id
         #query['monic_centered.base_field.degree'] = int(L.degree())
@@ -711,7 +711,7 @@ def add_chebyshev_model_FF(label, model_name='original', log_file=sys.stdout, ti
     if is_poly is None:
         add_is_polynomial_NF(label, model_name=model_name, log_file=log_file, timeout=timeout)
         my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where label = %(label)s""",query)
-        is_poly= my_cursor.fetchone()['is_polynomial']  
+        is_poly= my_cursor.fetchone()['is_polynomial']
     if not is_poly:
         cancel_alarm()
         #not chebyshev if not a polynomial
@@ -731,7 +731,7 @@ def add_chebyshev_model_FF(label, model_name='original', log_file=sys.stdout, ti
     if is_pcf is None:
         add_is_pcf(label, model_name=model_name, log_file=log_file, timeout=timeout)
         my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where label = %(label)s""",query)
-        is_poly= my_cursor.fetchone()['is_pcf']  
+        is_poly= my_cursor.fetchone()['is_pcf']
     if not is_pcf:
         cancel_alarm()
         #not chebyshev if not pcf
@@ -795,7 +795,6 @@ def add_chebyshev_model_FF(label, model_name='original', log_file=sys.stdout, ti
         K = ch.base_ring()
         bool, K_id = field_in_database_NF(K)
         assert(bool)
-        
 
         query['chebyshev_model.coeffs'] = [get_coefficients(g) for g in ch]
         query['chebyshev_model.resultant'] = str(ch.resultant())
@@ -832,7 +831,7 @@ def add_chebyshev_model_FF(label, model_name='original', log_file=sys.stdout, ti
             WHERE
                 label = %(label)s
             """, query)
-        
+
         cancel_alarm()
         log_file.write('chebyshev model done for:' + label + '\n')
         #TODO check rowcount

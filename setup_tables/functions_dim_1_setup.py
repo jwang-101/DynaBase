@@ -20,6 +20,14 @@ AUTHORS:
 
 # drop table if it already exists
 my_cursor.execute("""
+    DROP TABLE IF EXISTS rational_preperiodic_dim_1_NF
+""")
+
+my_cursor.execute("""
+    DROP TABLE IF EXISTS graphs_dim_1_NF
+""")
+
+my_cursor.execute("""
     DROP TABLE IF EXISTS functions_dim_1_NF
 """)
 
@@ -130,11 +138,6 @@ CREATE TABLE functions_dim_1_NF (
     is_pcf boolean,
     automorphism_group_cardinality integer,
     rational_twists varchar[],
-    number_rational_preperiodic integer,
-    rational_periodic_cycles integer[],
-    rational_preperiodic_components integer[],
-    rational_preriodic_graph_id varchar,
-    rational_periodic_points varchar[][2],
     critical_portrait_cardinality integer,
     post_critical_cardinality integer,
     critical_portrait_components integer[],
@@ -172,5 +175,28 @@ CREATE TABLE functions_dim_1_FF (
   )
 """,[function_label_length,field_label_length])
 
+
+#edges are stored: index is the point and the value is the image
+my_cursor.execute("""
+CREATE TABLE graphs_dim_1_NF (
+    graph_id serial PRIMARY KEY,
+    cardinality integer,
+    edges integer[],
+    num_components integer,
+    periodic_cycles integer[],
+    preperiodic_components integer[],
+    max_tail integer
+  )""")
+
+#need to make sure the points are stored in the same order as the components
+my_cursor.execute("""
+CREATE TABLE rational_preperiodic_dim_1_NF (
+    id serial PRIMARY KEY,
+    function_label varchar(%s),
+    base_field_label varchar(%s),
+    rational_periodic_points varchar[][2],
+    graph_id integer
+  )
+""",[function_label_length,field_label_length])
 
 my_session.commit()

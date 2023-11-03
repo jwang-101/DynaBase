@@ -59,7 +59,7 @@ def normalize_function_NF(F, log_file=sys.stdout):
         F.scale_by(lcm_den)
         base_field = base_field.ring()
         F = F.change_ring(base_field)
-        
+
     if isinstance(base_field, (PolynomialRing_general, MPolynomialRing_base)):
         R = PolynomialRing(base_field.base_ring(), base_field.ngens(), 't')
         phi = base_field.hom(R.gens(), R)
@@ -225,11 +225,11 @@ def conj_in_database_NF(F, conj_fns=None, log_file=sys.stdout, timeout=30):
         conj_fns = my_cursor.fetchall()
     if len(conj_fns) == 0:
         #nothing with the same sigma_1
-        return 0
+        return 0, []
 
     bool, g_label = model_in_database_NF(F, conj_fns=conj_fns, log_file=log_file)
     if bool:
-        return 1,g_label
+        return 1, g_label
 
     #now check for twists/conjugates
     #sigma_2
@@ -243,7 +243,7 @@ def conj_in_database_NF(F, conj_fns=None, log_file=sys.stdout, timeout=30):
     conj_fns = my_cursor.fetchall()
     if len(conj_fns) == 0:
         #nothing with the same sigma_1,sigma_2
-        return 0
+        return 0, []
     # TODO should we go to sigma_3??
 
     try:
@@ -268,7 +268,7 @@ def conj_in_database_NF(F, conj_fns=None, log_file=sys.stdout, timeout=30):
         #not in database
         cancel_alarm()
         return 0, []
-        
+
     except AlarmInterrupt:
         log_file.write('timeout: func_in_db: ' + str(timeout) + ':' + polys['val'] + '\n')
         raise
@@ -327,7 +327,7 @@ def add_function_NF(F, citations=[], family=[], keywords=[], action='add', bool_
             log_file.write('Could not add : ' + str(list(F)) + ' because ' + str(base_field) + ' not in database \n')
             raise ValueError("base_field not in database")
     F.normalize_coordinates()
-    
+
     f['base_field_label'] = K_id
     f['base_field_degree'] = int(base_field.degree())
     #f['base_field_emb'] = int(emb_index)
@@ -345,11 +345,12 @@ def add_function_NF(F, citations=[], family=[], keywords=[], action='add', bool_
     conj_fns = my_cursor.fetchall()
     m = len(conj_fns)
     found, L = conj_in_database_NF(F, conj_fns=conj_fns, log_file=log_file, timeout=timeout)
-    
+
     if found == 1:
         #function or rational conjugate already there
-        log_file.write('function already known for : ' + L['label'] + '\n')
-        return L[label]
+        print(L)
+        log_file.write('function already known for : ' + L[0] + '\n')
+        return L[0]
     # otherwise we'll add the function
     # assume none are conjugate if we get to here
     f['label'] = label + str(m+1)
@@ -433,7 +434,7 @@ def add_function_NF(F, citations=[], family=[], keywords=[], action='add', bool_
 def add_sigma_inv_NF(label, model_name='original', start=2, end=3, log_file=sys.stdout, timeout=30):
     """
     Compute the sigma invariants for the given function specified either by label.
-    
+
     model specifies which model name to use for computation
 
     action can be add/replace
@@ -459,7 +460,7 @@ def add_sigma_inv_NF(label, model_name='original', start=2, end=3, log_file=sys.
                     log_file.write('function ' + label + 'not found \n')
                     raise ValueError("function not found to update")
                 else:
-                    log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for sigma.' + str(k) + '\n')                        
+                    log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for sigma.' + str(k) + '\n')
             elif k == 3:
                 sigma.update({'three':[str(t) for t in F.sigma_invariants(k)]})
                 my_cursor.execute("""UPDATE functions_dim_1_NF
@@ -488,7 +489,7 @@ def add_sigma_inv_NF(label, model_name='original', start=2, end=3, log_file=sys.
 def add_is_pcf(label=None, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if the given function (identified by label) is postcritically finite.
-    
+
     'is_pcf'
 
     """
@@ -507,7 +508,7 @@ def add_is_pcf(label=None, model_name='original', log_file=sys.stdout, timeout=3
                     SET is_pcf = %(is_pcf)s
                     WHERE label=%(label)s
                     """,pcf)
-                
+
         if my_cursor.rowcount == 0:
             log_file.write('PCF: function ' + label + 'not found \n')
             raise ValueError("PCF: function not found to update")
@@ -529,7 +530,7 @@ def add_is_pcf(label=None, model_name='original', log_file=sys.stdout, timeout=3
 def add_critical_portrait(label, model_name='original', log_file=sys.stdout, timeout=30):
     """
     If the function is pcf create the critical point portrait.
-    
+
     computes:
       critical_portrait_cardinality
       post_critical_cardinality
@@ -552,7 +553,7 @@ def add_critical_portrait(label, model_name='original', log_file=sys.stdout, tim
         log_file.write('critical portrait: not pcf:' + label + '\n')
         return True
         #raise ValueError('Function ' + label + ' not pcf')
-    
+
     cpp = []
     try:
         F = get_sage_func_NF(label, model_name=model_name, log_file=log_file)
@@ -576,7 +577,7 @@ def add_critical_portrait(label, model_name='original', log_file=sys.stdout, tim
         #or normal_form was not cooercible?
     except AlarmInterrupt:
         log_file.write('timeout: create critical portrait:' + str(timeout) + ':' + label + '\n')
-    
+
     if cpp != []:
         ##TODO add graph_id
         my_cursor.execute("""UPDATE functions_dim_1_NF
@@ -586,7 +587,7 @@ def add_critical_portrait(label, model_name='original', log_file=sys.stdout, tim
                 critical_portrait_structure = %(critical_portrait_components)s
             WHERE label=%(label)s
             """,query)
-        
+
         cancel_alarm()
         log_file.write('critical portrait added:' + label + '\n')
         return True
@@ -628,29 +629,95 @@ def add_automorphism_group_NF(label, model_name='original', log_file=sys.stdout,
     cancel_alarm()
     return False
 
+def identify_graph(G,f):
+    """
+    determine if the digraph is already in the table and returns it's graph_id
+
+    If it is not in the table, then add it.
+
+    G is the graph of perperiodic points
+    f is the fuction
+    """
+    graph_data = {}
+    graph_data['cardinality'] = len(G.vertices())
+    graph_data['preperiodic_components'] = G.connected_components_sizes()
+    graph_data['num_components'] = len(G.connected_components())
+    periodic = set()
+    for T in G.all_simple_cycles():
+        periodic=periodic.union(set(T))
+    periodic_cycles = []
+    for T in G.connected_components():
+        num_periodic=0
+        for t in T:
+            if t in periodic:
+                num_periodic+=1
+        periodic_cycles.append(int(num_periodic))
+    graph_data['periodic_cycles'] = periodic_cycles
+    max_tail = 0
+    t = 0
+    for Q in G.vertices():
+        if G.in_degree(Q) == 0:
+            t = 0
+            while Q not in periodic:
+                t += 1
+                Q = f(Q)
+            if t > max_tail:
+                max_tail = t
+    graph_data['max_tail'] = max_tail
+    # edges relabels to graph verticies so this has to be done last
+    graph_data['edges'] = graph_to_array(G)
+    my_cursor.execute("""SELECT
+         graph_id
+         FROM graphs_dim_1_NF
+        WHERE cardinality=%(cardinality)s AND
+            edges = %(edges)s AND
+            periodic_cycles = %(periodic_cycles)s AND
+            num_components = %(num_components)s AND
+            preperiodic_components = %(preperiodic_components)s AND
+            max_tail = %(max_tail)s
+        """,graph_data)
+    if my_cursor.rowcount == 0:
+        #need to add the graph
+        my_cursor.execute("""INSERT INTO graphs_dim_1_NF
+            (cardinality, edges, num_components, periodic_cycles,
+             preperiodic_components, max_tail)
+            VALUES
+            (%(cardinality)s, %(edges)s, %(num_components)s, %(periodic_cycles)s,
+             %(preperiodic_components)s, %(max_tail)s)
+            RETURNING graph_id """,graph_data)
+    return my_cursor.fetchone()[0]
+
 def add_rational_preperiodic_points_NF(label, model_name='original', field_label=None, log_file=sys.stdout, timeout=30):
     """
     Find the rational preperiodic points and add
 
-    number_rational_preperiodic integer,
-    rational_periodic_cycles integer[],
-    rational_preperiodic_components integer[],
-    rational_preriodic_graph_id varchar,
-    rational_periodic_points varchar[][2],
+    into functions_dim_1_NF table:
+        rational_preriodic_graph_id varchar,
+
+    into rational_preperiodic_dim_1_NF table:
+        rational_periodic_points varchar[][2],
+
+    into graphs_dim_1_NF table: #if not already there
+        cardinality
+        edges
+        num_components
+        periodic_cycles
+        preperiodic components
+        max_tail
     """
     if timeout != 0:
         alarm(timeout)
 
     log_file.write('starting rational preperiodic points for:' + label + '\n')
     try:
-        query={}
+        graph_data = {}
+        preperiodic_data = {}
+        query = {}
         query['label']=label
         F = get_sage_func_NF(label, model_name=model_name, log_file=log_file)
         if field_label is None:
             K = F.base_ring()
         else:
-            #TODO move preperiodic data to it's own table to account for other fields
-            #for the same function
             K = get_sage_field_NF(field_label)
             # TODO: this may have embedding issues in some cases
             FK.change_ring(K)
@@ -664,18 +731,26 @@ def add_rational_preperiodic_points_NF(label, model_name='original', field_label
             preper = F.rational_preperiodic_graph()
         ## TODO: add graph_id
 
-        query['number_rational_preperiodic'] = len(preper.vertices())
-        query['rational_periodic_cycles'] = [int(len(t)-1) for t in preper.all_simple_cycles()]
-        query['rational_preperiodic_components'] = preper.connected_components_sizes()
-        #one per component
-        query['rational_periodic_points'] = [[str(t) for t in T[0]] for T in preper.all_simple_cycles()]
-        my_cursor.execute("""UPDATE functions_dim_1_NF
-            SET number_rational_preperiodic = %(number_rational_preperiodic)s,
-                rational_periodic_cycles = %(rational_periodic_cycles)s,
-                rational_preperiodic_components = %(rational_preperiodic_components)s,
-                rational_periodic_points = %(rational_periodic_points)s
-            WHERE label=%(label)s
-            """,query)
+        preperiodic_data['function_label'] = label
+        preperiodic_data['base_field_label'] = field_label
+        periodic = []
+        for c in preper.all_simple_cycles():
+            periodic.append([str(t) for t in c[0]])
+        preperiodic_data['rational_periodic_points'] = periodic
+        # one point per connected component
+        # TODO: needs to be the same order as the components are listed in the graph table
+
+        #identify graph and add if necessary
+        graph_id = identify_graph(preper, F)
+        preperiodic_data['graph_id'] = graph_id
+
+        #TODO check that it isn't already there
+        my_cursor.execute("""INSERT INTO rational_preperiodic_dim_1_NF
+            (function_label, base_field_label, rational_periodic_points, graph_id)
+            VALUES
+            (%(function_label)s, %(base_field_label)s, %(rational_periodic_points)s, %(graph_id)s)
+            RETURNING id """,preperiodic_data)
+
         #TODO check rowcount for success
         log_file.write('rational preperiodic points computed for:' + label + '\n')
         cancel_alarm()
@@ -726,14 +801,14 @@ def add_reduced_model_NF(label, model_name='original', log_file=sys.stdout, time
         else:
             bad_primes = list(set([p.norm() for p in g.primes_of_bad_reduction()])) #remove duplicates
             bad_primes.sort()
-        
+
         g.normalize_coordinates()
         #original model
         bool, K_id = field_in_database_NF(F.base_ring())
         assert(bool)
         query['reduced_model.coeffs'] = [get_coefficients(g) for g in F]
         query['reduced_model.resultant'] = str(F.resultant())
-        query['reduced_model.bad_primes'] = [int(p) for p in bad_primes]      
+        query['reduced_model.bad_primes'] = [int(p) for p in bad_primes]
         query['reduced_model.height'] = float(F.global_height())
         query['reduced_model.base_field_label'] = K_id
         #query['reduced_model.base_field.degree'] = int(F.base_ring().degree())
@@ -771,7 +846,7 @@ def add_reduced_model_NF(label, model_name='original', log_file=sys.stdout, time
 def add_is_polynomial_NF(label, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if the map is a polynomial map (totally ramified fixed point)
-    
+
     'is_polynomial'
     """
     if timeout != 0:
@@ -861,7 +936,7 @@ def add_monic_centered_model_NF(label, model_name='original', log_file=sys.stdou
         else:
             bad_primes = list(set([p.norm() for p in G.primes_of_bad_reduction()])) #remove duplicates
             bad_primes.sort()
-        query['monic_centered.bad_primes'] = [int(p) for p in bad_primes]     
+        query['monic_centered.bad_primes'] = [int(p) for p in bad_primes]
         query['monic_centered.height'] = float(G.global_height())
         query['monic_centered.base_field_label'] = L_id
         #query['monic_centered.base_field.degree'] = int(L.degree())
@@ -922,7 +997,7 @@ def add_chebyshev_model_NF(label, model_name='original', log_file=sys.stdout, ti
     if is_poly is None:
         add_is_polynomial_NF(label, model_name=model_name, log_file=log_file, timeout=timeout)
         my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where label = %(label)s""",query)
-        is_poly= my_cursor.fetchone()['is_polynomial']  
+        is_poly= my_cursor.fetchone()['is_polynomial']
     if not is_poly:
         cancel_alarm()
         #not chebyshev if not a polynomial
@@ -941,7 +1016,7 @@ def add_chebyshev_model_NF(label, model_name='original', log_file=sys.stdout, ti
     if is_pcf is None:
         add_is_pcf(label, model_name=model_name, log_file=log_file, timeout=timeout)
         my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where label = %(label)s""",query)
-        is_pcf= my_cursor.fetchone()['is_pcf']  
+        is_pcf= my_cursor.fetchone()['is_pcf']
     if not is_pcf:
         cancel_alarm()
         #not chebyshev if not pcf
@@ -1004,7 +1079,7 @@ def add_chebyshev_model_NF(label, model_name='original', log_file=sys.stdout, ti
         K = ch.base_ring()
         bool, K_id = field_in_database_NF(K)
         assert(bool)
-        
+
         query['is_chebyshev'] = True
         query['chebyshev_model.coeffs'] = [get_coefficients(g) for g in ch]
         query['chebyshev_model.resultant'] = str(ch.resultant())
@@ -1043,7 +1118,7 @@ def add_chebyshev_model_NF(label, model_name='original', log_file=sys.stdout, ti
             WHERE
                 label = %(label)s
             """, query)
-        
+
         cancel_alarm()
         log_file.write('chebyshev model done for:' + label + '\n')
         #TODO check rowcount
@@ -1132,7 +1207,7 @@ def add_newton_model_NF(label, model_name='original', log_file=sys.stdout, timeo
             M = matrix(QQ,2,2,[1,0,0,1])
         bool, L_id = field_in_database_NF(L)
         assert(bool)
-        
+
         N_aff = newton.dehomogenize(1)
         z = N_aff.domain().gen(0)
         Npoly = (z-N_aff[0]).numerator()
@@ -1159,7 +1234,6 @@ def add_newton_model_NF(label, model_name='original', log_file=sys.stdout, timeo
         for i in range(0,Npoly.degree()+1):
             C.append(str(Npoly.coefficient({z:i})))
         query['newton_model.polynomial_coeffs'] = C
-        
 
         my_cursor.execute("""UPDATE functions_dim_1_NF
             SET newton_model.coeffs = %(newton_model.coeffs)s,
@@ -1204,7 +1278,7 @@ def add_is_lattes_NF(label, model_name='original', log_file=sys.stdout, timeout=
     if is_pcf is None:
         add_is_pcf(label, model_name=model_name, log_file=log_file, timeout=timeout)
         my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where label = %(label)s""",query)
-        is_pcf= my_cursor.fetchone()['is_pcf']  
+        is_pcf= my_cursor.fetchone()['is_pcf']
     if not is_pcf:
         cancel_alarm()
         #not lattes if not pcf
@@ -1217,12 +1291,12 @@ def add_is_lattes_NF(label, model_name='original', log_file=sys.stdout, timeout=
         #TODO check rowcount
         log_file.write('lattes done for:' + label + '\n')
         return True
-    
+
     #check if lattes map
     try:
         if timeout != 0:
             alarm(timeout)
-        
+
         F = get_sage_func_NF(label,model_name=model_name, log_file=log_file)
         d = ZZ(F.degree())
         try:
@@ -1234,7 +1308,7 @@ def add_is_lattes_NF(label, model_name='original', log_file=sys.stdout, timeout=
         crit, post_crit = get_post_critical(Fbar)
         if (len(crit) == 2*d - 2) and \
             (len(set(post_crit).difference(set(crit))) == 4):
-            is_lattes = True 
+            is_lattes = True
             #TODO get curve
             """
             try:

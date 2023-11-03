@@ -61,7 +61,7 @@ def get_post_critical(Fbar):
     crit = Fbar.critical_points()
     images_needed = copy(crit)
     while len(images_needed) != 0:
-        Q = images_needed.pop() 
+        Q = images_needed.pop()
         Q2 = Fbar(Q)
         if Q2 not in post_crit:
            post_crit.add(Q2)
@@ -140,3 +140,19 @@ def choose_display_model(label, log_file=sys.stdout):
             label = %(label)s
         """, query)
     return True
+
+def graph_to_array(G):
+    #graph to array
+    n = G.num_verts()
+    G.relabel(tuple([t for t in range(n)]))
+    E = [-1 for i in range(n)]
+    for v in G.edges():
+        E[v[0]] = v[1]
+    return E
+
+def array_to_graph(E):
+    #array to graph
+    Ed = []
+    for i in range(len(E)):
+        Ed.append((i,E[i]))
+    return DiGraph(Ed, loops=True)

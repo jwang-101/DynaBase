@@ -22,7 +22,7 @@ for d in range(2,200):
         add_field_NF(QuadraticField(d,'a'), log_file=log_file)
         add_field_NF(QuadraticField(-d,'a'), log_file=log_file)
 
-#degree 3
+# degree 3
 B=10
 R=PolynomialRing(QQ,'z')
 z=R.gen(0)

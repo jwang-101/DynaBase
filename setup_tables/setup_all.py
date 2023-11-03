@@ -6,6 +6,10 @@ and one for finite fields.
     functions_dim_1_NF
     functions_dim_1_FF
 
+Auxilary Tables
+    graphs_dim_1_NF
+    rational_preperiodic_dim_1_NF
+
 There are two tables for fields data
     number_fields
     finite_fields

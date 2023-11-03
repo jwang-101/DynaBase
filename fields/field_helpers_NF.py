@@ -100,7 +100,7 @@ def add_field_NF(K, normalize=True, log_file=sys.stdout):
     class_number integer
 
     K absolute number field  deg.r.disc.num
-    
+
     ##todo: deal with repeat 'x.x.x.' for higher degree number fields,
     so should search by normalized defining polynomial and then increment
 
@@ -121,22 +121,20 @@ def add_field_NF(K, normalize=True, log_file=sys.stdout):
     if K in NumberFields():
         if K == QQ:
             label = '1.1.1.'
-            search_label = '1\\.1\\.1\\.1'
         else:
             label = str(K.degree()) + '.' + str(K.signature()[0]) + '.' + str(K.discriminant().abs()) + '.'
-            search_label = str(K.degree()) + '\\.' + str(K.signature()[0]) + '\\.' + str(K.discriminant().abs()) + '\\.'
     else:
         raise NotImplementedError("only number fields")
 
     #take into account distinct fields with the same initial label values
-    field_query['label'] = search_label
-    my_cursor.execute("""SELECT label FROM number_fields WHERE label=%(label)s""",field_query)
+    # TODO: these end up not matching LMFDB labels
+    field_query['label'] = label + '%'
+    my_cursor.execute("""SELECT label FROM number_fields WHERE label LIKE %(label)s""",field_query)
     g = my_cursor.fetchall()
-    
+
     #debugging sanity check
     for L in g:
         print(L)
-    
     label = label + str(len(g)+1)
     log_file.write('label computed: ' + label + '\n')
 
@@ -145,14 +143,14 @@ def add_field_NF(K, normalize=True, log_file=sys.stdout):
     F['degree'] = int(K.degree())
     F['defn_poly_coeffs'] = [int(t) for t in K.defining_polynomial().coefficients(sparse=False)]
     if K == QQ:
-        F['signature'] = str((1,0))
+        F['signature'] = ([int(1),int(0)])
         F['conductor'] = int(1)
         F['discriminant'] = int(1)
         F['class_number'] = int(1)
         #F['embeddings'] = {'min_diff' : float(1.0),\
         #                   '0' : {'val_real' : float(0.0), 'val_imag' : float(0.0)}}
     else:
-        F['signature'] = str(K.signature())
+        F['signature'] = [int(t) for t in K.signature()]
         F['discriminant'] = int(K.discriminant())
         if K.is_abelian():
             F['conductor'] = int(K.conductor())
@@ -169,7 +167,7 @@ def add_field_NF(K, normalize=True, log_file=sys.stdout):
         #    F['embeddings'].update({str(i) : {'val_real':float(phi(K.gen()).real()),\
         #                                 'val_imag':float(phi(K.gen()).imag())}})
         #    i += 1
-    
+
     # add to number fields
     if K==QQ or K.is_abelian():
         my_cursor.execute("""INSERT INTO number_fields VALUES

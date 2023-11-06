@@ -41,7 +41,8 @@ CREATE TABLE citations (
     journal varchar,
     year integer,
     citation varchar,
-    mathscinet varchar
+    mathscinet varchar,
+    id serial
   )""")
 
 

@@ -1359,11 +1359,40 @@ def add_is_lattes_NF(label, model_name='original', log_file=sys.stdout, timeout=
     cancel_alarm()
     return False
 
+def add_citations_NF(label, citations, log_file=sys.stdout):
+    """
+        Add the id of the citations for this functions
+    """
+    #make sure they are ints
+    citations = [int(t) for t in citations]
+
+    my_cursor.execute("""SELECT
+        citations
+         FROM functions_dim_1_NF
+        WHERE label=%s
+        """,[label])
+    #merge and sort the new list of citations
+    if my_cursor.rowcount == 0:
+        new_cites = sorted(citations)
+    else:
+        cites = my_cursor.fetchone()['citations']
+        if cites is None:
+            new_cites = sorted(citations)
+        else:
+            new_cites = sorted(list(set(cites+citations)))
+    log_file.write('new citations list for ' + label + ' is ' + str(new_cites) + '\n')
+    my_cursor.execute("""UPDATE functions_dim_1_NF
+        SET citations = %s
+        WHERE
+            label = %s
+        """, [new_cites, label])
+
 def add_function_all_NF(F, log_file=sys.stdout):
     """
     add all entries for one dynamical system
     """
     label=add_function_NF(F,log_file=log_file)
+    add_citations_NF(label, citations, log_file=log_file)
     add_sigma_inv_NF(label,'original',2,3,log_file=log_file)
     add_is_pcf(label,'original',log_file=log_file)
     add_critical_portrait(label,'original',log_file=log_file)

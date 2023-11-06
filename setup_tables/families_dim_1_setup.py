@@ -1,5 +1,5 @@
 """
-Setup PostgreSQL table for families of functions.
+Setup PostgreSQL table for families of functions in dimension 1.
 
 AUTHORS:
 
@@ -19,7 +19,7 @@ AUTHORS:
 
 # drop table if it already exists
 my_cursor.execute("""
-    DROP TABLE IF EXISTS families_dim_1
+    DROP TABLE IF EXISTS families_dim_1_NF
 """)
 
 
@@ -32,25 +32,22 @@ my_cursor.execute("""
 ######################################
 # Create Functions table Schema
 
-#Need Newton polynomial for newton model
-#Can we find the elliptic curve of Lattes?
-
 my_cursor.execute("""
-CREATE TABLE families_dim_1 (
+CREATE TABLE families_dim_1_NF (
     label varchar(%s) PRIMARY KEY,
     degree integer,
     num_parameters integer,
-    base_field base_field_type,
+    model_coeffs varchar[],
+    model_resultant varchar,
+    base_field_label varchar(%s),
+    base_field_degree integer,
     sigma_invariants sigma_invariants_type,
     citations integer[],
-    original_model model_type,
     is_polynomial boolean,
-    is_Newton boolean,
-    is_Lattes boolean,
     num_critical_points integer,
     automorphism_group_cardinality integer
     )
-""",[function_label_length])
+""",[function_label_length, field_label_length])
 
 
 my_session.commit()

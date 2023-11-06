@@ -30,13 +30,6 @@ import hashlib  #for shake
 
 
 ###########################################
-# Global Constants
-###########################################
-
-#length of SHAKE-256S hash for function label
-digest_length = int(4)
-
-###########################################
 # General Functions
 ###########################################
 
@@ -274,7 +267,7 @@ def conj_in_database_NF(F, conj_fns=None, log_file=sys.stdout, timeout=30):
         raise
 
 
-def add_function_NF(F, citations=[], family=[], keywords=[], action='add', bool_add_field=False, log_file=sys.stdout, timeout=30):
+def add_function_NF(F, bool_add_field=False, log_file=sys.stdout, timeout=30):
     """
     Give a sage function F, determine it's label and add it to the database.
 
@@ -299,8 +292,6 @@ def add_function_NF(F, citations=[], family=[], keywords=[], action='add', bool_
     'sigma_invariants.one'
     'citations'
 
-    #todo need to update conjugate check:
-    #This checks if here are any twists or congjuates in the database
     """
     f = {}
     f['degree'] = int(F.degree())
@@ -354,19 +345,6 @@ def add_function_NF(F, citations=[], family=[], keywords=[], action='add', bool_
     # otherwise we'll add the function
     # assume none are conjugate if we get to here
     f['label'] = label + str(m+1)
-
-    #TODO: update citation code
-    cites = []
-    for cite in citations:
-        cites.append(bibliography[cite])
-    if cites == []:
-        f['citations'] = None
-    else:
-        f['citations'] = cites
-    if family == []:
-        f['family'] = None
-    else:
-        f['family'] = family
 
     #original model
     f['original_model.coeffs'] = [get_coefficients(g) for g in F]

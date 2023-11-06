@@ -29,12 +29,6 @@ import sha3  #adds shake to hashlib
 import hashlib  #for shake
 
 
-###########################################
-# Global Constants
-###########################################
-
-#length of SHAKE-256S hash for function label
-digest_length = int(4)
 
 ###########################################
 # General Functions

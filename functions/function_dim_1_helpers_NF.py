@@ -30,13 +30,6 @@ import hashlib  #for shake
 
 
 ###########################################
-# Global Constants
-###########################################
-
-#length of SHAKE-256S hash for function label
-digest_length = int(4)
-
-###########################################
 # General Functions
 ###########################################
 
@@ -274,7 +267,7 @@ def conj_in_database_NF(F, conj_fns=None, log_file=sys.stdout, timeout=30):
         raise
 
 
-def add_function_NF(F, citations=[], family=[], keywords=[], action='add', bool_add_field=False, log_file=sys.stdout, timeout=30):
+def add_function_NF(F, bool_add_field=False, log_file=sys.stdout, timeout=30):
     """
     Give a sage function F, determine it's label and add it to the database.
 
@@ -299,8 +292,6 @@ def add_function_NF(F, citations=[], family=[], keywords=[], action='add', bool_
     'sigma_invariants.one'
     'citations'
 
-    #todo need to update conjugate check:
-    #This checks if here are any twists or congjuates in the database
     """
     f = {}
     f['degree'] = int(F.degree())
@@ -354,19 +345,6 @@ def add_function_NF(F, citations=[], family=[], keywords=[], action='add', bool_
     # otherwise we'll add the function
     # assume none are conjugate if we get to here
     f['label'] = label + str(m+1)
-
-    #TODO: update citation code
-    cites = []
-    for cite in citations:
-        cites.append(bibliography[cite])
-    if cites == []:
-        f['citations'] = None
-    else:
-        f['citations'] = cites
-    if family == []:
-        f['family'] = None
-    else:
-        f['family'] = family
 
     #original model
     f['original_model.coeffs'] = [get_coefficients(g) for g in F]
@@ -1359,11 +1337,40 @@ def add_is_lattes_NF(label, model_name='original', log_file=sys.stdout, timeout=
     cancel_alarm()
     return False
 
+def add_citations_NF(label, citations, log_file=sys.stdout):
+    """
+        Add the id of the citations for this functions
+    """
+    #make sure they are ints
+    citations = [int(t) for t in citations]
+
+    my_cursor.execute("""SELECT
+        citations
+         FROM functions_dim_1_NF
+        WHERE label=%s
+        """,[label])
+    #merge and sort the new list of citations
+    if my_cursor.rowcount == 0:
+        new_cites = sorted(citations)
+    else:
+        cites = my_cursor.fetchone()['citations']
+        if cites is None:
+            new_cites = sorted(citations)
+        else:
+            new_cites = sorted(list(set(cites+citations)))
+    log_file.write('new citations list for ' + label + ' is ' + str(new_cites) + '\n')
+    my_cursor.execute("""UPDATE functions_dim_1_NF
+        SET citations = %s
+        WHERE
+            label = %s
+        """, [new_cites, label])
+
 def add_function_all_NF(F, log_file=sys.stdout):
     """
     add all entries for one dynamical system
     """
     label=add_function_NF(F,log_file=log_file)
+    add_citations_NF(label, citations, log_file=log_file)
     add_sigma_inv_NF(label,'original',2,3,log_file=log_file)
     add_is_pcf(label,'original',log_file=log_file)
     add_critical_portrait(label,'original',log_file=log_file)

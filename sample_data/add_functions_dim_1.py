@@ -17,7 +17,7 @@ log_file = open(path_to_log, 'w', 1)
 #x^2 + c
 P=ProjectiveSpace(QQ,1,'x,y')
 x,y = P.gens()
-for c in QQ.range_by_height(5):
+for c in QQ.range_by_height(8):
     F=DynamicalSystem([x**2+c*y**2,y**2]) #polys
     label = add_function_all_NF(F)
 

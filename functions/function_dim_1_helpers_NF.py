@@ -629,7 +629,7 @@ def add_automorphism_group_NF(label, model_name='original', log_file=sys.stdout,
     cancel_alarm()
     return False
 
-def identify_graph(G,f):
+def identify_graph(G,f,log_file=sys.stdout):
     """
     determine if the digraph is already in the table and returns it's graph_id
 
@@ -663,28 +663,34 @@ def identify_graph(G,f):
                 Q = f(Q)
             if t > max_tail:
                 max_tail = t
-    graph_data['max_tail'] = max_tail
-    # edges relabels to graph verticies so this has to be done last
-    graph_data['edges'] = graph_to_array(G)
+    graph_data['max_tail'] = int(max_tail)
+    #check whether the graph is in the table
     my_cursor.execute("""SELECT
-         graph_id
+         graph_id, edges
          FROM graphs_dim_1_NF
         WHERE cardinality=%(cardinality)s AND
-            edges = %(edges)s AND
             periodic_cycles = %(periodic_cycles)s AND
             num_components = %(num_components)s AND
             preperiodic_components = %(preperiodic_components)s AND
             max_tail = %(max_tail)s
         """,graph_data)
-    if my_cursor.rowcount == 0:
-        #need to add the graph
-        my_cursor.execute("""INSERT INTO graphs_dim_1_NF
-            (cardinality, edges, num_components, periodic_cycles,
-             preperiodic_components, max_tail)
-            VALUES
-            (%(cardinality)s, %(edges)s, %(num_components)s, %(periodic_cycles)s,
-             %(preperiodic_components)s, %(max_tail)s)
-            RETURNING graph_id """,graph_data)
+    # Check for isomorphic graphs
+    for row in my_cursor.fetchall():
+        G_graph = array_to_graph(row['edges'])
+        if G_graph.is_isomorphic(G):
+            log_file.write('preperiodic graph already in table: ' + str(row['graph_id']) + '\n')
+            return row['graph_id']
+    # the graph is not in the table, so add it
+    # edges relabels to graph verticies so this has to be done last
+    graph_data['edges'] = graph_to_array(G)
+    my_cursor.execute("""INSERT INTO graphs_dim_1_NF
+        (cardinality, edges, num_components, periodic_cycles,
+         preperiodic_components, max_tail)
+        VALUES
+        (%(cardinality)s, %(edges)s, %(num_components)s, %(periodic_cycles)s,
+         %(preperiodic_components)s, %(max_tail)s)
+        RETURNING graph_id """,graph_data)
+    log_file.write('adding preperiodic graph to table: ' + str(graph_data['edges']) + '\n')
     return my_cursor.fetchone()[0]
 
 def add_rational_preperiodic_points_NF(label, model_name='original', field_label=None, log_file=sys.stdout, timeout=30):
@@ -741,7 +747,7 @@ def add_rational_preperiodic_points_NF(label, model_name='original', field_label
         # TODO: needs to be the same order as the components are listed in the graph table
 
         #identify graph and add if necessary
-        graph_id = identify_graph(preper, F)
+        graph_id = identify_graph(preper, F, log_file=log_file)
         preperiodic_data['graph_id'] = graph_id
 
         #TODO check that it isn't already there

@@ -22,6 +22,7 @@ AUTHORS:
 #sagerel -pip install pysha3
 import sha3  #adds shake to hashlib
 import hashlib  #for shake
+from sage.rings.polynomial.multi_polynomial_ring_base import MPolynomialRing_base
 
 
 ##########################
@@ -32,6 +33,77 @@ load("functions/function_dim_1_helpers_generic.py")
 ###########################################
 # Families over Number Fields
 ###########################################
+
+def normalize_family_NF(F, log_file=sys.stdout):
+    """
+    put the base field in normalized form.
+
+    TODO: Does this need to return the embedding?
+    """
+    K=F.base_ring()
+    Kbase = F.base_ring().base_ring()
+    if Kbase in NumberFields():
+        if Kbase != QQ:
+            def_poly = Kbase.defining_polynomial()
+            def_poly_new, gen = pari(def_poly).polredabs(1)
+            def_poly_new = def_poly_new.sage({def_poly.parent().variable_names()[0]:def_poly.parent().gen(0)})
+            if def_poly_new != def_poly:
+                gen = gen.lift().sage({def_poly.parent().variable_names()[0]:def_poly.parent().gen(0)})
+                if emb is None:
+                    if Kbase.coerce_embedding() is None:
+                        L = NumberField(def_poly_new, 'a', embedding=CC(def_poly_new.roots(ring=CC)[0][0]))
+                    else:
+                        L = NumberField(def_poly_new, 'a', embedding=gen(Kbase.coerce_embedding()(Kbase.gen())))
+                else:
+                    L = NumberField(def_poly_new, 'a', embedding=gen(emb(Kbase.gen())))
+                to_L = Kbase.hom([gen], L)
+                Kbase = Kbase.change_ring(to_L)
+                log_file.write('Normalized field:' + str(K) + ' to ' + str(L) + '\n')
+            if Kbase.variable_name() != 'a':
+                Kbase = Kbase.change_names('a')
+                K = K.change_ring(Kbase)
+                F = F.change_ring(K)
+                log_file.write('Normalized field variable:' + str(K) + '\n')
+        N = K.ngens()
+        if N > 1 or isinstance(K,MPolynomialRing_base):
+            R = PolynomialRing(Kbase,'t',N)
+        else:
+            R = PolynomialRing(Kbase,'t0')
+        if [str(v) for v in K.gens()] != [str(v) for v in R.gens()]:
+            F = F.change_ring(R)
+        return F
+    else: #other field
+        raise NotImplementedError('Can only normalize number fields with this function')
+
+def get_sage_family_NF(label, log_file=sys.stdout):
+    """
+    Given a label and a model name, return the sage dynamical system.
+
+    """
+    query={}
+    query['label']=label
+    my_cursor.execute("""SELECT model_coeffs, num_parameters, base_field_label FROM families_dim_1_NF
+        WHERE label=%(label)s
+        """, query)
+    G = my_cursor.fetchone()
+    K = get_sage_field_NF(G['base_field_label'])
+
+    n = G['num_parameters']
+    S = PolynomialRing(K,'t',n)
+
+    P = ProjectiveSpace(S,1,'x,y')
+    R = P.coordinate_ring()
+    x,y = R.gens()
+    d = len(G['model_coeffs'][0])-1
+    polys = []
+    for L in G['model_coeffs']:
+        poly = 0
+        for i in range(0,d+1):
+            poly += x**(d-i)*y**i*S(L[i])
+        polys.append(poly)
+
+    return DynamicalSystem(polys, domain=P)
+
 
 def add_family_NF(F, is_poly=None, num_crit=None, num_aut=None, bool_add_field=False, log_file=sys.stdout, timeout=30):
     """
@@ -50,12 +122,12 @@ def add_family_NF(F, is_poly=None, num_crit=None, num_aut=None, bool_add_field=F
     is_polynomial boolean,
     num_critical_points integer,
     automorphism_group_cardinality integer
-    )
     """
     f = {}
     f['degree'] = int(F.degree())
     f['dimension'] = int(F.codomain().dimension_relative())
     #f['keywords'] = keywords
+    F = normalize_family_NF(F)
 
     base_field = F.base_ring().base_ring()
     f['num_parameters'] = int(base_field.ngens())
@@ -169,4 +241,3 @@ def add_citations_family_NF(label, citations, log_file=sys.stdout):
         WHERE
             label = %s
         """, [new_cites, label])
-

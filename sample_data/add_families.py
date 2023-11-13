@@ -19,7 +19,7 @@ c = R.gen()
 P=ProjectiveSpace(R,1,'x,y')
 x,y = P.gens()
 F=DynamicalSystem([x**2+c*y**2,y**2])
-label = add_family_NF(F, is_poly=True, num_crit=2, num_aut=1)
+label = add_family_NF(F, is_poly=True, num_crit=int(2), num_aut=int(1))
 
 my_cursor.execute("""SELECT
         id
@@ -28,6 +28,14 @@ my_cursor.execute("""SELECT
         """,['Poonen1998'])
 cites = my_cursor.fetchone()
 add_citations_family_NF(label,cites)
+
+R=PolynomialRing(QQ,1,'c')
+c = R.gen()
+P=ProjectiveSpace(R,1,'x,y')
+x,y = P.gens()
+F=DynamicalSystem([x**3+c*y**3,y**3])
+label = add_family_NF(F, is_poly=True, num_crit=int(2), num_aut=int(1))
+
 
 ###########################
 

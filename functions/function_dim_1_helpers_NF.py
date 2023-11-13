@@ -309,6 +309,8 @@ def add_function_NF(F, bool_add_field=False, log_file=sys.stdout, timeout=30):
     #    F, phi = normalize_function(F, log_file=log_file)
     #    base_field = F.base_ring()
 
+    F, phi = normalize_function_NF(F, log_file=log_file)
+
     bool, K_id = field_in_database_NF(base_field)
     K_id = K_id
     if not bool:
@@ -369,14 +371,14 @@ def add_function_NF(F, bool_add_field=False, log_file=sys.stdout, timeout=30):
 
     my_cursor.execute("""INSERT INTO functions_dim_1_NF
         (label, degree, base_field_label, base_field_degree,
-         sigma_invariants.one, citations, family,
+         sigma_invariants.one,
          original_model.coeffs, original_model.resultant, original_model.bad_primes,
          original_model.height, original_model.base_field_label,
          original_model.conjugation_from_original,
          original_model.conjugation_from_original_base_field_label, display_model)
         VALUES
         (%(label)s, %(degree)s, %(base_field_label)s, %(base_field_degree)s,
-         %(sigma_invariants.one)s, %(citations)s, %(family)s,
+         %(sigma_invariants.one)s,
          %(original_model.coeffs)s, %(original_model.resultant)s, %(original_model.bad_primes)s,
          %(original_model.height)s, %(original_model.base_field_label)s,
          %(original_model.conjugation_from_original)s,
@@ -1342,7 +1344,17 @@ def add_citations_NF(label, citations, log_file=sys.stdout):
         Add the id of the citations for this functions
     """
     #make sure they are ints
-    citations = [int(t) for t in citations]
+    if citations == []:
+        log_file.write('no citations for ' + label + '\n')
+        return True
+    num_cites = []
+    for cite in citations:
+        my_cursor.execute("""SELECT
+            id
+             FROM citations
+            WHERE label=%s
+            """,[cite])
+        num_cites.append(my_cursor.fetchone()['id'])
 
     my_cursor.execute("""SELECT
         citations
@@ -1351,21 +1363,106 @@ def add_citations_NF(label, citations, log_file=sys.stdout):
         """,[label])
     #merge and sort the new list of citations
     if my_cursor.rowcount == 0:
-        new_cites = sorted(citations)
+        new_cites = sorted(num_cites)
     else:
         cites = my_cursor.fetchone()['citations']
         if cites is None:
-            new_cites = sorted(citations)
+            new_cites = sorted(num_cites)
         else:
-            new_cites = sorted(list(set(cites+citations)))
+            new_cites = sorted(list(set(cites+num_cites)))
     log_file.write('new citations list for ' + label + ' is ' + str(new_cites) + '\n')
     my_cursor.execute("""UPDATE functions_dim_1_NF
         SET citations = %s
         WHERE
             label = %s
         """, [new_cites, label])
+    log_file.write('done\n')
+    return my_cursor.rowcount
 
-def add_function_all_NF(F, log_file=sys.stdout):
+def function_in_family_NF(f, F, maxk=3):
+    """
+    see if f is a member of the family F
+
+    TODO: Make this more efficient by considering k=1, then k=2, then k=3
+
+    TODO: What to do when I.dimenion() > 0?
+    """
+    sigmas = []
+    fsigmas = []
+    for k in range(1,maxk+1):
+        sigmas.append([str(v) for v in F.sigma_invariants(k)])
+        fsigmas.append(f.sigma_invariants(k))
+    num_sigmas = []
+    S = PolynomialRing(F.base_ring().base_ring(),F.base_ring().ngens(),'t')
+    SF = FractionField(S)
+    for k in range(maxk):
+        num_sigmas.append([SF(v) for v in sigmas[k]])
+    L = []
+    for k in range(maxk):
+        for i in range(len(num_sigmas[k])):
+            L.append(fsigmas[k][i]*num_sigmas[k][i].denominator() - num_sigmas[k][i].numerator())
+    I = S.ideal(L)
+    #return(I)
+    f = get_sage_func_NF()
+    for v in I.variety():
+        g = F.specialization(v)
+        if f.change_ring(QQbar).is_conjugate(g.change_ring(QQbar)):
+            return True,v
+    return False,{}
+
+def add_families_NF(label, log_file=sys.stdout):
+    """
+        Check if F is a member of any family in the table of families.
+        Add those families to the record
+    """
+    my_cursor.execute("""SELECT degree, (sigma_invariants).one,
+        (sigma_invariants).two, (sigma_invariants).three, family
+            FROM functions_dim_1_NF where label = %s""",[label])
+    if my_cursor.rowcount == 0:
+        log_file.write('No database entry for ' + label + '\n')
+        return False
+    func_vals = my_cursor.fetchone()
+    d = func_vals['degree']
+    families = func_vals['family']
+    if families is None:
+        families = []
+    my_cursor.execute("""SELECT label, (sigma_invariants).one,
+        (sigma_invariants).two, (sigma_invariants).three,
+        base_field_label, num_parameters
+            FROM families_dim_1_NF where degree = %s""",[d])
+    for fam in my_cursor.fetchall():
+        fam_sigmas = []
+        func_sigmas = []
+        #TODO: what if the function is defined over an extension of the family base field?
+        K = get_sage_field_NF(fam['base_field_label'])
+        S = PolynomialRing(K,fam['num_parameters'],'t')
+        SF = FractionField(S)
+        for k in ['one','two','three']:
+            fam_sigmas.append([SF(v) for v in fam[k]])
+            func_sigmas.append([S(v) for v in func_vals[k]])
+        L = []
+        for k in range(len(fam_sigmas)):
+            for i in range(len(fam_sigmas[k])):
+                L.append(func_sigmas[k][i]*fam_sigmas[k][i].denominator() - fam_sigmas[k][i].numerator())
+        I = S.ideal(L)
+        f = get_sage_func_NF(label, 'original')
+        F = get_sage_family_NF(fam['label'])
+        #return(I)
+        for v in I.variety():
+            g = F.specialization(v)
+            if f.change_ring(QQbar).is_conjugate(g.change_ring(QQbar)):
+                families.append(fam['label'])
+        #remove any duplicates
+        families = sorted(list(set(families)))
+        log_file.write('Updating families for ' + label + ' to ' + str(families) + '\n')
+        # TODO: merge citation lists too!
+        my_cursor.execute("""UPDATE functions_dim_1_NF
+            SET family = %s
+            WHERE label=%s
+            """,[families, label])
+
+
+def add_function_all_NF(F, citations=[], log_file=sys.stdout):
     """
     add all entries for one dynamical system
     """
@@ -1376,9 +1473,10 @@ def add_function_all_NF(F, log_file=sys.stdout):
     add_critical_portrait(label,'original',log_file=log_file)
     add_automorphism_group_NF(label,'original',log_file=log_file)
     add_rational_preperiodic_points_NF(label,log_file=log_file)
+    #TODO: need to fix these
     if label not in ['1.2.c8ddd2a7.1', '1.2.611af5d0.1', '1.2.7cb63904.1',\
         '1.2.0d94343e.1','1.2.beb83dd2.1','1.2.dd6fd9ae.1','1.2.4994c36e.1',\
-        '1.2.98d76bdd.1']:
+        '1.2.98d76bdd.1', '1.3.423d4b7a.1']:
         add_reduced_model_NF(label,log_file=log_file)
     add_is_polynomial_NF(label,log_file=log_file)
     add_monic_centered_model_NF(label,log_file=log_file)
@@ -1386,6 +1484,7 @@ def add_function_all_NF(F, log_file=sys.stdout):
     add_newton_model_NF(label,log_file=log_file)
     add_is_lattes_NF(label,log_file=log_file)
     choose_display_model(label,log_file=log_file)
+    add_families_NF(label, log_file=log_file)
 
     return label
 

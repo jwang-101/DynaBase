@@ -147,7 +147,7 @@ def get_sage_func_NF(label, model_name, log_file=sys.stdout):
     for L in G['coeffs']:
         poly = 0
         for i in range(0,d+1):
-            poly += x**(d-i)*y**i*Integer(L[i])
+            poly += x**(d-i)*y**i*K(L[i])
         polys.append(poly)
 
     return DynamicalSystem(polys, domain=P)
@@ -325,6 +325,7 @@ def add_function_NF(F, bool_add_field=False, log_file=sys.stdout, timeout=30):
     f['base_field_degree'] = int(base_field.degree())
     #f['base_field_emb'] = int(emb_index)
 
+    # TODO: What about labels for Lattes maps? Should it be based on cremona label?
     f['sigma_invariants.one']=[str(t) for t in F.sigma_invariants(1)]
     sigma_hash = str(hashlib.shake_256(''.join(f['sigma_invariants.one']).encode('utf-8')).hexdigest(digest_length))
     label = str(f['dimension']) +'.'+ str(f['degree']) + '.' + sigma_hash + '.'
@@ -703,6 +704,8 @@ def add_rational_preperiodic_points_NF(label, model_name='original', field_label
         F = get_sage_func_NF(label, model_name=model_name, log_file=log_file)
         if field_label is None:
             K = F.base_ring()
+            bool, field_label = field_in_database_NF(K, log_file=log_file)
+            #TODO deal with case K is not in database
         else:
             K = get_sage_field_NF(field_label)
             # TODO: this may have embedding issues in some cases
@@ -1415,7 +1418,7 @@ def add_families_NF(label, log_file=sys.stdout):
         Check if F is a member of any family in the table of families.
         Add those families to the record
     """
-    my_cursor.execute("""SELECT degree, (sigma_invariants).one,
+    my_cursor.execute("""SELECT degree, base_field_label, (sigma_invariants).one,
         (sigma_invariants).two, (sigma_invariants).three, family
             FROM functions_dim_1_NF where label = %s""",[label])
     if my_cursor.rowcount == 0:
@@ -1423,6 +1426,7 @@ def add_families_NF(label, log_file=sys.stdout):
         return False
     func_vals = my_cursor.fetchone()
     d = func_vals['degree']
+    K = get_sage_field_NF(func_vals['base_field_label'])
     families = func_vals['family']
     if families is None:
         families = []
@@ -1433,8 +1437,8 @@ def add_families_NF(label, log_file=sys.stdout):
     for fam in my_cursor.fetchall():
         fam_sigmas = []
         func_sigmas = []
-        #TODO: what if the function is defined over an extension of the family base field?
-        K = get_sage_field_NF(fam['base_field_label'])
+        # TODO: what if the function is defined over an extension of the family base field?
+        # assume for now that the family is defined over QQ
         S = PolynomialRing(K,fam['num_parameters'],'t')
         SF = FractionField(S)
         for k in ['one','two','three']:
@@ -1446,11 +1450,15 @@ def add_families_NF(label, log_file=sys.stdout):
                 L.append(func_sigmas[k][i]*fam_sigmas[k][i].denominator() - fam_sigmas[k][i].numerator())
         I = S.ideal(L)
         f = get_sage_func_NF(label, 'original')
-        F = get_sage_family_NF(fam['label'])
+        phi_bar = K.embeddings(QQbar)[0]
+        fbar = f.change_ring(phi_bar)
+        F = get_sage_family_NF(fam['label']).change_ring(S)
         #return(I)
         for v in I.variety():
+            print(v)
             g = F.specialization(v)
-            if f.change_ring(QQbar).is_conjugate(g.change_ring(QQbar)):
+            gbar = g.change_ring(phi_bar)
+            if fbar.is_conjugate(gbar):
                 families.append(fam['label'])
         #remove any duplicates
         families = sorted(list(set(families)))
@@ -1474,9 +1482,9 @@ def add_function_all_NF(F, citations=[], log_file=sys.stdout):
     add_automorphism_group_NF(label,'original',log_file=log_file)
     add_rational_preperiodic_points_NF(label,log_file=log_file)
     #TODO: need to fix these
-    if label not in ['1.2.c8ddd2a7.1', '1.2.611af5d0.1', '1.2.7cb63904.1',\
+    if (F.base_ring().degree() == 1) and (label not in ['1.2.c8ddd2a7.1', '1.2.611af5d0.1', '1.2.7cb63904.1',\
         '1.2.0d94343e.1','1.2.beb83dd2.1','1.2.dd6fd9ae.1','1.2.4994c36e.1',\
-        '1.2.98d76bdd.1', '1.3.423d4b7a.1']:
+        '1.2.98d76bdd.1', '1.3.423d4b7a.1']):
         add_reduced_model_NF(label,log_file=log_file)
     add_is_polynomial_NF(label,log_file=log_file)
     add_monic_centered_model_NF(label,log_file=log_file)

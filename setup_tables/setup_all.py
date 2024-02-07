@@ -62,11 +62,10 @@ function_label_length= 25
 ####
 
 
-
 load("setup_tables/functions_dim_1_setup.py")
 load("setup_tables/fields_setup.py")
 load("setup_tables/families_dim_1_setup.py")
-#load("setup_tables/citations_setup.py")
+load("setup_tables/citations_setup.py")
 
 my_session.commit()
 

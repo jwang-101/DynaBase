@@ -27,7 +27,10 @@ from sage.rings.polynomial.polynomial_ring import PolynomialRing_general
 #sagerel -pip install pysha3
 import sha3  #adds shake to hashlib
 import hashlib  #for shake
+import sys
 
+#length of SHAKE-256S hash for function label
+digest_length = int(4)
 
 
 ###########################################
@@ -35,7 +38,11 @@ import hashlib  #for shake
 ###########################################
 
 
-load("functions/function_dim_1_helpers_generic.py")
+from functions.function_dim_1_helpers_generic import get_coefficients
+from functions.function_dim_1_helpers_generic import get_post_critical
+from functions.function_dim_1_helpers_generic import choose_display_model
+from functions.function_dim_1_helpers_generic import graph_to_array
+from functions.function_dim_1_helpers_generic import array_to_graph
 
 
 ##############################################################

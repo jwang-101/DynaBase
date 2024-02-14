@@ -17,6 +17,15 @@ AUTHORS:
 #                  https://www.gnu.org/licenses/
 # ****************************************************************************
 
+import sys
+from sage.categories.number_fields import NumberFields
+from sage.libs.pari import pari
+from sage.rings.cc import CC
+from sage.rings.number_field.number_field import NumberField
+from sage.rings.polynomial.polynomial_ring_constructor import PolynomialRing
+from sage.rings.rational_field import QQ
+
+
 def normalize_field_NF(K, emb=None, log_file=sys.stdout):
     """
     put the base field in normalized form.
@@ -75,7 +84,7 @@ def check_field_normalized_NF(K, log_file=sys.stdout):
     raise ValueError('field not a number field')
 
 
-def field_in_database_NF(K, log_file=sys.stdout):
+def field_in_database_NF(K, my_cursor, log_file=sys.stdout):
     if not check_field_normalized_NF(K, log_file=log_file):
         raise ValueError("field not normalized")
     D = {}
@@ -87,7 +96,7 @@ def field_in_database_NF(K, log_file=sys.stdout):
         return False, 0
     return True, label[0]
 
-def add_field_NF(K, normalize=True, log_file=sys.stdout):
+def add_field_NF(K, my_cursor, normalize=True, log_file=sys.stdout):
     """
     Add the field K to the number_fields table.
 
@@ -112,7 +121,7 @@ def add_field_NF(K, normalize=True, log_file=sys.stdout):
             raise ValueError('field not normalized')
         else:
             K, phi = normalize_field_NF(K, log_file=log_file)
-    bool, K_label = field_in_database_NF(K, log_file=log_file)
+    bool, K_label = field_in_database_NF(K, my_cursor, log_file=log_file)
     if bool:
         log_file.write('already in db: ' + str(K) + '\n')
         #already in database
@@ -184,7 +193,7 @@ def add_field_NF(K, normalize=True, log_file=sys.stdout):
     return K_id
 
 
-def delete_field_NF(K):
+def delete_field_NF(K, my_cursor):
     bool, K_label = field_in_database_NF(K)
     if not bool:
         raise ValueError("field not in database")
@@ -196,7 +205,7 @@ def delete_field_NF(K):
         raise ValueError("Deleted more than 1 row") #should never occur
     return val
 
-def get_sage_field_NF(field_label):
+def get_sage_field_NF(field_label, my_cursor):
     """
     given a field label, get the field from the database and return the
     field as sage object

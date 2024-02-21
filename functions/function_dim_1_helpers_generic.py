@@ -18,8 +18,9 @@ AUTHORS:
 #                  https://www.gnu.org/licenses/
 # ****************************************************************************
 
-
-
+from copy import copy
+from sage.graphs.digraph import DiGraph
+from sage.misc.verbose import set_verbose
 from sage.rings.fraction_field import is_FractionField
 from sage.rings.polynomial.multi_polynomial_ring_base import MPolynomialRing_base
 from sage.rings.polynomial.polynomial_ring import PolynomialRing_general
@@ -27,14 +28,8 @@ from sage.rings.polynomial.polynomial_ring import PolynomialRing_general
 #sagerel -pip install pysha3
 import sha3  #adds shake to hashlib
 import hashlib  #for shake
+import sys
 
-
-###########################################
-# Global Constants
-###########################################
-
-#length of SHAKE-256S hash for function label
-digest_length = int(4)
 
 ###########################################
 # General Functions
@@ -68,7 +63,7 @@ def get_post_critical(Fbar):
            images_needed.append(Q2)
     return crit, list(post_crit)
 
-def choose_display_model(label, log_file=sys.stdout):
+def choose_display_model(label, my_cursor, log_file=sys.stdout):
     """
     From the list of computed models set one as display.
     If the model required a field extension over original, then it is not chosen.

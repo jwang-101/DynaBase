@@ -22,12 +22,28 @@ AUTHORS:
 #sagerel -pip install pysha3
 import sha3  #adds shake to hashlib
 import hashlib  #for shake
+from sage.categories.number_fields import NumberFields
+from sage.dynamics.arithmetic_dynamics.generic_ds import DynamicalSystem
 from sage.rings.polynomial.multi_polynomial_ring_base import MPolynomialRing_base
+from sage.rings.polynomial.polynomial_ring_constructor import PolynomialRing
+from sage.rings.rational_field import QQ
+from sage.schemes.projective.projective_space import ProjectiveSpace
+import sys
+
+#length of SHAKE-256S hash for function label
+digest_length = int(4)
 
 
 ##########################
 
-load("functions/function_dim_1_helpers_generic.py")
+from functions.function_dim_1_helpers_generic import get_coefficients
+from functions.function_dim_1_helpers_generic import get_post_critical
+from functions.function_dim_1_helpers_generic import choose_display_model
+from functions.function_dim_1_helpers_generic import graph_to_array
+from functions.function_dim_1_helpers_generic import array_to_graph
+
+from fields.field_helpers_NF import get_sage_field_NF
+from fields.field_helpers_NF import field_in_database_NF
 
 
 ###########################################
@@ -75,7 +91,7 @@ def normalize_family_NF(F, log_file=sys.stdout):
     else: #other field
         raise NotImplementedError('Can only normalize number fields with this function')
 
-def get_sage_family_NF(label, log_file=sys.stdout):
+def get_sage_family_NF(label, my_cursor, log_file=sys.stdout):
     """
     Given a label and a model name, return the sage dynamical system.
 
@@ -86,7 +102,7 @@ def get_sage_family_NF(label, log_file=sys.stdout):
         WHERE label=%(label)s
         """, query)
     G = my_cursor.fetchone()
-    K = get_sage_field_NF(G['base_field_label'])
+    K = get_sage_field_NF(G['base_field_label'], my_cursor)
 
     n = G['num_parameters']
     S = PolynomialRing(K,'t',n)
@@ -105,7 +121,7 @@ def get_sage_family_NF(label, log_file=sys.stdout):
     return DynamicalSystem(polys, domain=P)
 
 
-def add_family_NF(F, is_poly=None, num_crit=None, num_aut=None, bool_add_field=False, log_file=sys.stdout, timeout=30):
+def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, bool_add_field=False, log_file=sys.stdout, timeout=30):
     """
     Give a family of sage functions F, determine it's label and add it to the database.
 
@@ -132,7 +148,7 @@ def add_family_NF(F, is_poly=None, num_crit=None, num_aut=None, bool_add_field=F
     base_field = F.base_ring().base_ring()
     f['num_parameters'] = int(base_field.ngens())
 
-    bool, K_id = field_in_database_NF(base_field)
+    bool, K_id = field_in_database_NF(base_field, my_cursor)
     K_id = K_id
     if not bool:
         if bool_add_field:
@@ -214,7 +230,7 @@ def add_family_NF(F, is_poly=None, num_crit=None, num_aut=None, bool_add_field=F
     return F_id
 
 
-def add_citations_family_NF(label, citations, log_file=sys.stdout):
+def add_citations_family_NF(label, citations, my_cursor, log_file=sys.stdout):
     """
         Add the id of the citations for this family
     """

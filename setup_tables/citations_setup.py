@@ -93,7 +93,6 @@ for row in bibliography:
         """,row)
 
 my_session.commit()
-my_session.close()
 
 
 

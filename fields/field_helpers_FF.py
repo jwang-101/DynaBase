@@ -17,6 +17,14 @@ AUTHORS:
 #                  https://www.gnu.org/licenses/
 # ****************************************************************************
 
+import sys
+
+from sage.categories.finite_fields import FiniteFields
+from sage.databases.conway import ConwayPolynomials
+from sage.rings.finite_rings.finite_field_constructor import GF
+from sage.rings.polynomial.polynomial_ring_constructor import PolynomialRing
+
+
 def normalize_field_FF(K, log_file=sys.stdout):
     """
     put the base field in normalized form.
@@ -36,7 +44,7 @@ def normalize_field_FF(K, log_file=sys.stdout):
         return K, K.Hom(K).identity()
     else: #other field
         raise NotImplementedError('Can only normalize finite fields with this function')
-        
+
 
 def check_field_normalized_FF(K, log_file=sys.stdout):
     """
@@ -61,7 +69,7 @@ def check_field_normalized_FF(K, log_file=sys.stdout):
     raise ValueError('field not finite')
 
 
-def field_in_database_FF(K, log_file=sys.stdout):
+def field_in_database_FF(K, my_cursor, log_file=sys.stdout):
     if not check_field_normalized_FF(K, log_file=log_file):
         raise ValueError("field not normalized")
     D = {}
@@ -72,8 +80,8 @@ def field_in_database_FF(K, log_file=sys.stdout):
     if label is None:
         return False, 0
     return True, label['label']
-    
-def add_field_FF(K, normalize=True, log_file=sys.stdout):
+
+def add_field_FF(K, my_cursor, normalize=True, log_file=sys.stdout):
     """
     Add the field K to the finite_fields table.
 
@@ -87,12 +95,12 @@ def add_field_FF(K, normalize=True, log_file=sys.stdout):
             raise ValueError('field not normalized')
         else:
             K, phi = normalize_field_FF(K, log_file=log_file)
-    bool, K_id = field_in_database_FF(K, log_file=log_file)
+    bool, K_id = field_in_database_FF(K, my_cursor, log_file=log_file)
     if bool:
         log_file.write('already in db: ' + str(K) + '\n')
         #already in database
         return -1
-    
+
     if K in FiniteFields():
         label = str(K.characteristic()) + '.' + str(K.degree())
     else:
@@ -115,8 +123,8 @@ def add_field_FF(K, normalize=True, log_file=sys.stdout):
     return K_id
 
 
-def delete_field_FF(K):
-    bool, id = field_in_database_FF(K)
+def delete_field_FF(K, my_curosr):
+    bool, id = field_in_database_FF(K, my_cursor)
     if not bool:
         raise ValueError("field not in database")
     val = my_cursor.execute("""DELETE FROM finite_fields WHERE label = K_label""")
@@ -126,7 +134,7 @@ def delete_field_FF(K):
         raise ValueError("Deleted more than 1 row") #should never occur
     return val
 
-def get_sage_field_FF(field_label):
+def get_sage_field_FF(field_label, my_cursor):
     """
     given a field label, get the field from the database and return the
     field as sage object

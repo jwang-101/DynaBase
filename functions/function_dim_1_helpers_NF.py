@@ -19,14 +19,35 @@ AUTHORS:
 # ****************************************************************************
 
 
+from copy import copy
 
+from sage.categories.function_fields import FunctionFields
+from sage.dynamics.arithmetic_dynamics.generic_ds import DynamicalSystem
+from sage.matrix.constructor import matrix
+from sage.matrix.matrix_space import MatrixSpace
+from sage.misc.verbose import set_verbose
+from sage.rings.fraction_field import FractionField
 from sage.rings.fraction_field import is_FractionField
+from sage.rings.integer_ring import ZZ
 from sage.rings.polynomial.multi_polynomial_ring_base import MPolynomialRing_base
 from sage.rings.polynomial.polynomial_ring import PolynomialRing_general
+from sage.rings.polynomial.polynomial_ring_constructor import PolynomialRing
+from sage.rings.qqbar import number_field_elements_from_algebraics
+from sage.rings.qqbar import QQbar
+from sage.rings.rational_field import QQ
+from sage.schemes.projective.projective_space import ProjectiveSpace
+
 
 #sagerel -pip install pysha3
 import sha3  #adds shake to hashlib
 import hashlib  #for shake
+from cysignals.alarm import alarm
+from cysignals.signals import AlarmInterrupt
+from cysignals.alarm import cancel_alarm
+import sys
+
+#length of SHAKE-256S hash for function label
+digest_length = int(4)
 
 
 ###########################################
@@ -34,11 +55,22 @@ import hashlib  #for shake
 ###########################################
 
 
-load("functions/function_dim_1_helpers_generic.py")
+from functions.function_dim_1_helpers_generic import get_coefficients
+from functions.function_dim_1_helpers_generic import get_post_critical
+from functions.function_dim_1_helpers_generic import choose_display_model
+from functions.function_dim_1_helpers_generic import graph_to_array
+from functions.function_dim_1_helpers_generic import array_to_graph
+
 
 ##############################################################
 #  Functionality for working with functions over number fields
 ##############################################################
+
+from fields.field_helpers_NF import normalize_field_NF
+from fields.field_helpers_NF import field_in_database_NF
+from fields.field_helpers_NF import get_sage_field_NF
+
+from functions.families_dim_1_helpers_NF import get_sage_family_NF
 
 def normalize_function_NF(F, log_file=sys.stdout):
     """
@@ -73,7 +105,7 @@ def normalize_function_NF(F, log_file=sys.stdout):
     return F, phi
 
 
-def model_in_database_NF(F, sigma_1=None, conj_fns=None, log_file=sys.stdout):
+def model_in_database_NF(F, my_cursor, sigma_1=None, conj_fns=None, log_file=sys.stdout):
     """
     Determine if the model F is in the database.
 
@@ -99,7 +131,7 @@ def model_in_database_NF(F, sigma_1=None, conj_fns=None, log_file=sys.stdout):
     model_names = ['original_model', 'monic_centered', 'chebyshev_model', 'reduced_model', 'newton_model']
     #field_label, emb_index, field_id = get_field_label(F.base_ring(), log_file=log_file)
     F_coeffs = [get_coefficients(g) for g in F]
-    bool, K_id = field_in_database_NF(F.base_ring(), log_file=log_file)
+    bool, K_id = field_in_database_NF(F.base_ring(), my_cursor, log_file=log_file)
     if not bool:
         return 0, '0'
     for g in conj_fns:
@@ -109,7 +141,7 @@ def model_in_database_NF(F, sigma_1=None, conj_fns=None, log_file=sys.stdout):
     return 0, '0'
 
 
-def get_sage_func_NF(label, model_name, log_file=sys.stdout):
+def get_sage_func_NF(label, model_name, my_cursor, log_file=sys.stdout):
     """
     Given a label and a model name, return the sage dynamical system.
 
@@ -138,7 +170,7 @@ def get_sage_func_NF(label, model_name, log_file=sys.stdout):
             """, query)
     G = my_cursor.fetchone()
 
-    K = get_sage_field_NF(G['base_field_label'])
+    K = get_sage_field_NF(G['base_field_label'], my_cursor)
     P = ProjectiveSpace(K,1,'x,y')
     R = P.coordinate_ring()
     x,y = R.gens()
@@ -190,7 +222,7 @@ def check_conjugates_NF(F,G, normalize_base=False, log_file=sys.stdout):
 
 
 
-def conj_in_database_NF(F, conj_fns=None, log_file=sys.stdout, timeout=30):
+def conj_in_database_NF(F, my_cursor, conj_fns=None, log_file=sys.stdout, timeout=30):
     """
     Determine if F is conjugate to a model already in the database.
     This includes the identity conjugation.
@@ -220,7 +252,7 @@ def conj_in_database_NF(F, conj_fns=None, log_file=sys.stdout, timeout=30):
         #nothing with the same sigma_1
         return 0, []
 
-    bool, g_label = model_in_database_NF(F, conj_fns=conj_fns, log_file=log_file)
+    bool, g_label = model_in_database_NF(F, my_cursor, conj_fns=conj_fns, log_file=log_file)
     if bool:
         return 1, g_label
 
@@ -244,7 +276,7 @@ def conj_in_database_NF(F, conj_fns=None, log_file=sys.stdout, timeout=30):
             alarm(timeout)
         for g in conj_fns:
             # TODO allow other models?
-            twist_val = check_conjugates_NF(get_sage_func_NF(g[0], 'original'),F)
+            twist_val = check_conjugates_NF(get_sage_func_NF(g[0], 'original', my_cursor),F)
             if twist_val == 1:
                 log_file.write('already there: conjugate found in db: ' + str(list(F)) + ' as ' + g[0] + '\n')
                 cancel_alarm()
@@ -267,7 +299,7 @@ def conj_in_database_NF(F, conj_fns=None, log_file=sys.stdout, timeout=30):
         raise
 
 
-def add_function_NF(F, bool_add_field=False, log_file=sys.stdout, timeout=30):
+def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, timeout=30):
     """
     Give a sage function F, determine it's label and add it to the database.
 
@@ -309,9 +341,11 @@ def add_function_NF(F, bool_add_field=False, log_file=sys.stdout, timeout=30):
     #    F, phi = normalize_function(F, log_file=log_file)
     #    base_field = F.base_ring()
 
+    print(F)
+    print(normalize_function_NF(F))
     F, phi = normalize_function_NF(F, log_file=log_file)
 
-    bool, K_id = field_in_database_NF(base_field)
+    bool, K_id = field_in_database_NF(base_field, my_cursor)
     K_id = K_id
     if not bool:
         if bool_add_field:
@@ -338,7 +372,7 @@ def add_function_NF(F, bool_add_field=False, log_file=sys.stdout, timeout=30):
             (sigma_invariants).one=%(sigma_invariants.one)s::varchar[]""",query)
     conj_fns = my_cursor.fetchall()
     m = len(conj_fns)
-    found, L = conj_in_database_NF(F, conj_fns=conj_fns, log_file=log_file, timeout=timeout)
+    found, L = conj_in_database_NF(F, my_cursor, conj_fns=conj_fns, log_file=log_file, timeout=timeout)
 
     if found == 1:
         #function or rational conjugate already there
@@ -412,7 +446,7 @@ def add_function_NF(F, bool_add_field=False, log_file=sys.stdout, timeout=30):
     return F_id
 
 
-def add_sigma_inv_NF(label, model_name='original', start=2, end=3, log_file=sys.stdout, timeout=30):
+def add_sigma_inv_NF(label, my_cursor, model_name='original', start=2, end=3, log_file=sys.stdout, timeout=30):
     """
     Compute the sigma invariants for the given function specified either by label.
 
@@ -426,7 +460,7 @@ def add_sigma_inv_NF(label, model_name='original', start=2, end=3, log_file=sys.
         alarm(timeout)
     log_file.write('computing sigmas for : ' + label + ' from ' + str(start) + ' to ' + str(end) + '\n')
     try:
-        F = get_sage_func_NF(label,model_name, log_file=log_file)
+        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
         sigma = {'label':label}
         for k in range(start, end+1):
             if k == 1:
@@ -467,7 +501,7 @@ def add_sigma_inv_NF(label, model_name='original', start=2, end=3, log_file=sys.
     cancel_alarm()
     return False
 
-def add_is_pcf(label=None, model_name='original', log_file=sys.stdout, timeout=30):
+def add_is_pcf(my_cursor, label=None, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if the given function (identified by label) is postcritically finite.
 
@@ -478,7 +512,7 @@ def add_is_pcf(label=None, model_name='original', log_file=sys.stdout, timeout=3
         alarm(timeout)
     try:
         log_file.write('computing is_pcf for : ' + label + '\n')
-        F = get_sage_func_NF(label, model_name, log_file=log_file)
+        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
         pcf={'label':label}
         try:
             is_pcf = F.is_postcritically_finite()
@@ -508,7 +542,7 @@ def add_is_pcf(label=None, model_name='original', log_file=sys.stdout, timeout=3
     return False
 
 
-def add_critical_portrait(label, model_name='original', log_file=sys.stdout, timeout=30):
+def add_critical_portrait(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     If the function is pcf create the critical point portrait.
 
@@ -537,7 +571,7 @@ def add_critical_portrait(label, model_name='original', log_file=sys.stdout, tim
 
     cpp = []
     try:
-        F = get_sage_func_NF(label, model_name=model_name, log_file=log_file)
+        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
         g = F.critical_point_portrait()
         #TODO add graph_id information!!!
         ##query['critical_portrait_graph_id'] = TODO
@@ -575,7 +609,7 @@ def add_critical_portrait(label, model_name='original', log_file=sys.stdout, tim
     return False
 
 
-def add_automorphism_group_NF(label, model_name='original', log_file=sys.stdout, timeout=30):
+def add_automorphism_group_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Find the automorphisms group.
 
@@ -586,7 +620,7 @@ def add_automorphism_group_NF(label, model_name='original', log_file=sys.stdout,
         alarm(timeout)
     log_file.write('starting aut group for:' + label + '\n')
     try:
-        F = get_sage_func_NF(label,model_name=model_name, log_file=log_file)
+        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
         try:
             Fbar = F.change_ring(QQbar)
         except ValueError:
@@ -610,7 +644,7 @@ def add_automorphism_group_NF(label, model_name='original', log_file=sys.stdout,
     cancel_alarm()
     return False
 
-def identify_graph(G,f,log_file=sys.stdout):
+def identify_graph(G, f, my_cursor, log_file=sys.stdout):
     """
     determine if the digraph is already in the table and returns it's graph_id
 
@@ -674,7 +708,7 @@ def identify_graph(G,f,log_file=sys.stdout):
     log_file.write('adding preperiodic graph to table: ' + str(graph_data['edges']) + '\n')
     return my_cursor.fetchone()[0]
 
-def add_rational_preperiodic_points_NF(label, model_name='original', field_label=None, log_file=sys.stdout, timeout=30):
+def add_rational_preperiodic_points_NF(label, my_cursor, model_name='original', field_label=None, log_file=sys.stdout, timeout=30):
     """
     Find the rational preperiodic points and add
 
@@ -701,13 +735,13 @@ def add_rational_preperiodic_points_NF(label, model_name='original', field_label
         preperiodic_data = {}
         query = {}
         query['label']=label
-        F = get_sage_func_NF(label, model_name=model_name, log_file=log_file)
+        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
         if field_label is None:
             K = F.base_ring()
-            bool, field_label = field_in_database_NF(K, log_file=log_file)
+            bool, field_label = field_in_database_NF(K, my_cursor, log_file=log_file)
             #TODO deal with case K is not in database
         else:
-            K = get_sage_field_NF(field_label)
+            K = get_sage_field_NF(field_label, my_cursor)
             # TODO: this may have embedding issues in some cases
             FK.change_ring(K)
         if timeout != 0:
@@ -730,7 +764,7 @@ def add_rational_preperiodic_points_NF(label, model_name='original', field_label
         # TODO: needs to be the same order as the components are listed in the graph table
 
         #identify graph and add if necessary
-        graph_id = identify_graph(preper, F, log_file=log_file)
+        graph_id = identify_graph(preper, F, my_cursor, log_file=log_file)
         preperiodic_data['graph_id'] = graph_id
 
         #TODO check that it isn't already there
@@ -753,7 +787,7 @@ def add_rational_preperiodic_points_NF(label, model_name='original', field_label
     cancel_alarm()
     return False
 
-def add_reduced_model_NF(label, model_name='original', log_file=sys.stdout, timeout=30):
+def add_reduced_model_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Compute the reduced model
 
@@ -773,7 +807,7 @@ def add_reduced_model_NF(label, model_name='original', log_file=sys.stdout, time
     query['label']=label
     log_file.write('Computing reduced model for:' + label + '\n')
     try:
-        F = get_sage_func_NF(label, model_name=model_name, log_file=log_file)
+        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
         try:
             log_file.write('trying reduced with dynatomic \n')
             g, M = F.reduced_form(smallest_coeffs=True, dynatomic=True,\
@@ -793,7 +827,7 @@ def add_reduced_model_NF(label, model_name='original', log_file=sys.stdout, time
 
         g.normalize_coordinates()
         #original model
-        bool, K_id = field_in_database_NF(F.base_ring())
+        bool, K_id = field_in_database_NF(F.base_ring(), my_cursor)
         assert(bool)
         query['reduced_model.coeffs'] = [get_coefficients(g) for g in F]
         query['reduced_model.resultant'] = str(F.resultant())
@@ -832,7 +866,7 @@ def add_reduced_model_NF(label, model_name='original', log_file=sys.stdout, time
     cancel_alarm()
     return False
 
-def add_is_polynomial_NF(label, model_name='original', log_file=sys.stdout, timeout=30):
+def add_is_polynomial_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if the map is a polynomial map (totally ramified fixed point)
 
@@ -845,7 +879,7 @@ def add_is_polynomial_NF(label, model_name='original', log_file=sys.stdout, time
     try:
         query={}
         query['label']=label
-        F = get_sage_func_NF(label, model_name=model_name, log_file=log_file)
+        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
         is_poly = F.is_polynomial()
 
         query['is_polynomial'] = is_poly
@@ -866,7 +900,7 @@ def add_is_polynomial_NF(label, model_name='original', log_file=sys.stdout, time
     cancel_alarm()
     return False
 
-def add_monic_centered_model_NF(label, model_name='original', log_file=sys.stdout, timeout=30):
+def add_monic_centered_model_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Compute the monic centered model.
 
@@ -891,7 +925,7 @@ def add_monic_centered_model_NF(label, model_name='original', log_file=sys.stdou
     my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where label = %(label)s""",query)
     is_poly= my_cursor.fetchone()['is_polynomial']
     if is_poly is None:
-        add_is_polynomial_NF(label, model_name=model_name, log_file=log_file, timeout=timeout)
+        add_is_polynomial_NF(label, my_cursor, model_name=model_name, log_file=log_file, timeout=timeout)
         my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where label = %(label)s""",query)
         is_poly= my_cursor.fetchone()['is_polynomial']
     if not is_poly:
@@ -901,7 +935,7 @@ def add_monic_centered_model_NF(label, model_name='original', log_file=sys.stdou
 
     monic_centered = {}
     try:
-        F = get_sage_func_NF(label, model_name=model_name, log_file=log_file)
+        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
         N = F.domain().dimension()
         #todo fix normal form so this does not have to be special cased
         G,M,phi = F.normal_form(return_conjugation=True)
@@ -916,7 +950,7 @@ def add_monic_centered_model_NF(label, model_name='original', log_file=sys.stdou
         G.scale_by(1/G[0].coefficient({G.domain().gen(0):G.degree()}))
 
         #monic centered model
-        bool, L_id = field_in_database_NF(L)
+        bool, L_id = field_in_database_NF(L, my_cursor)
         assert(bool)
         query['monic_centered.coeffs'] = [get_coefficients(g) for g in G]
         query['monic_centered.resultant'] = str(G.resultant())
@@ -959,7 +993,7 @@ def add_monic_centered_model_NF(label, model_name='original', log_file=sys.stdou
     cancel_alarm()
     return False
 
-def add_chebyshev_model_NF(label, model_name='original', log_file=sys.stdout, timeout=30):
+def add_chebyshev_model_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if chebyshev and compute the chebyshev model.
 
@@ -1003,7 +1037,7 @@ def add_chebyshev_model_NF(label, model_name='original', log_file=sys.stdout, ti
     my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where label = %(label)s""",query)
     is_pcf= my_cursor.fetchone()['is_pcf']
     if is_pcf is None:
-        add_is_pcf(label, model_name=model_name, log_file=log_file, timeout=timeout)
+        add_is_pcf(my_cursor, label, model_name=model_name, log_file=log_file, timeout=timeout)
         my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where label = %(label)s""",query)
         is_pcf= my_cursor.fetchone()['is_pcf']
     if not is_pcf:
@@ -1021,7 +1055,7 @@ def add_chebyshev_model_NF(label, model_name='original', log_file=sys.stdout, ti
     try:
         if timeout != 0:
             alarm(timeout)
-        F = get_sage_func_NF(label, model_name=model_name, log_file=log_file)
+        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
         try:
             Fbar = F.change_ring(QQbar)
         except ValueError:
@@ -1066,7 +1100,7 @@ def add_chebyshev_model_NF(label, model_name='original', log_file=sys.stdout, ti
         ch = F.domain().chebyshev_polynomial(d)
         conj_set = Fbar.conjugating_set(ch.change_ring(QQbar))
         K = ch.base_ring()
-        bool, K_id = field_in_database_NF(K)
+        bool, K_id = field_in_database_NF(K, my_cursor)
         assert(bool)
 
         query['is_chebyshev'] = True
@@ -1088,7 +1122,7 @@ def add_chebyshev_model_NF(label, model_name='original', log_file=sys.stdout, ti
         K, el, psi = number_field_elements_from_algebraics([t for r in M for t in r])
         L, phi = normalize_field_NF(K, log_file=log_file)
         M = matrix(L, N+1, N+1, [phi(t) for t in el])
-        bool, L_id = field_in_database_NF(L)
+        bool, L_id = field_in_database_NF(L, my_cursor)
         assert(bool)
         query['chebyshev_model.conjugation_from_original'] = [str(t) for r in M for t in r]
         query['chebyshev_model.conjugation_from_original_base_field_label'] = L_id
@@ -1122,7 +1156,7 @@ def add_chebyshev_model_NF(label, model_name='original', log_file=sys.stdout, ti
     cancel_alarm()
     return False
 
-def add_newton_model_NF(label, model_name='original', log_file=sys.stdout, timeout=30):
+def add_newton_model_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if newton and compute the newton model.
     See 1510.02271 for a possible newton citation
@@ -1142,7 +1176,7 @@ def add_newton_model_NF(label, model_name='original', log_file=sys.stdout, timeo
     log_file.write('starting newton model for:' + label + '\n')
     #check if newton map
     try:
-        F = get_sage_func_NF(label,model_name=model_name)
+        F = get_sage_func_NF(label, model_name, my_cursor)
         N = F.domain().dimension()
         if timeout != 0:
             alarm(timeout)
@@ -1194,7 +1228,7 @@ def add_newton_model_NF(label, model_name='original', log_file=sys.stdout, timeo
             newton = F
             L = F.base_ring()
             M = matrix(QQ,2,2,[1,0,0,1])
-        bool, L_id = field_in_database_NF(L)
+        bool, L_id = field_in_database_NF(L, my_cursor)
         assert(bool)
 
         N_aff = newton.dehomogenize(1)
@@ -1252,7 +1286,7 @@ def add_newton_model_NF(label, model_name='original', log_file=sys.stdout, timeo
     return False
 
 
-def add_is_lattes_NF(label, model_name='original', log_file=sys.stdout, timeout=30):
+def add_is_lattes_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if lattes. Updates is_pcf if not known
 
@@ -1265,7 +1299,7 @@ def add_is_lattes_NF(label, model_name='original', log_file=sys.stdout, timeout=
     my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where label = %(label)s""",query)
     is_pcf= my_cursor.fetchone()['is_pcf']
     if is_pcf is None:
-        add_is_pcf(label, model_name=model_name, log_file=log_file, timeout=timeout)
+        add_is_pcf(my_cursor, label, model_name=model_name, log_file=log_file, timeout=timeout)
         my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where label = %(label)s""",query)
         is_pcf= my_cursor.fetchone()['is_pcf']
     if not is_pcf:
@@ -1286,7 +1320,7 @@ def add_is_lattes_NF(label, model_name='original', log_file=sys.stdout, timeout=
         if timeout != 0:
             alarm(timeout)
 
-        F = get_sage_func_NF(label,model_name=model_name, log_file=log_file)
+        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
         d = ZZ(F.degree())
         try:
             Fbar = F.change_ring(QQbar)
@@ -1342,7 +1376,7 @@ def add_is_lattes_NF(label, model_name='original', log_file=sys.stdout, timeout=
     cancel_alarm()
     return False
 
-def add_citations_NF(label, citations, log_file=sys.stdout):
+def add_citations_NF(label, citations, my_cursor, log_file=sys.stdout):
     """
         Add the id of the citations for this functions
     """
@@ -1406,14 +1440,14 @@ def function_in_family_NF(f, F, maxk=3):
             L.append(fsigmas[k][i]*num_sigmas[k][i].denominator() - num_sigmas[k][i].numerator())
     I = S.ideal(L)
     #return(I)
-    f = get_sage_func_NF()
+    #f = get_sage_func_NF()
     for v in I.variety():
         g = F.specialization(v)
         if f.change_ring(QQbar).is_conjugate(g.change_ring(QQbar)):
             return True,v
     return False,{}
 
-def add_families_NF(label, log_file=sys.stdout):
+def add_families_NF(label, my_cursor, log_file=sys.stdout):
     """
         Check if F is a member of any family in the table of families.
         Add those families to the record
@@ -1426,7 +1460,7 @@ def add_families_NF(label, log_file=sys.stdout):
         return False
     func_vals = my_cursor.fetchone()
     d = func_vals['degree']
-    K = get_sage_field_NF(func_vals['base_field_label'])
+    K = get_sage_field_NF(func_vals['base_field_label'], my_cursor)
     families = func_vals['family']
     if families is None:
         families = []
@@ -1449,10 +1483,10 @@ def add_families_NF(label, log_file=sys.stdout):
             for i in range(len(fam_sigmas[k])):
                 L.append(func_sigmas[k][i]*fam_sigmas[k][i].denominator() - fam_sigmas[k][i].numerator())
         I = S.ideal(L)
-        f = get_sage_func_NF(label, 'original')
+        f = get_sage_func_NF(label, 'original', my_cursor)
         phi_bar = K.embeddings(QQbar)[0]
         fbar = f.change_ring(phi_bar)
-        F = get_sage_family_NF(fam['label']).change_ring(S)
+        F = get_sage_family_NF(fam['label'], my_cursor).change_ring(S)
         #return(I)
         for v in I.variety():
             print(v)
@@ -1470,29 +1504,29 @@ def add_families_NF(label, log_file=sys.stdout):
             """,[families, label])
 
 
-def add_function_all_NF(F, citations=[], log_file=sys.stdout):
+def add_function_all_NF(F, my_cursor, citations=[], log_file=sys.stdout):
     """
     add all entries for one dynamical system
     """
-    label=add_function_NF(F,log_file=log_file)
-    add_citations_NF(label, citations, log_file=log_file)
-    add_sigma_inv_NF(label,'original',2,3,log_file=log_file)
-    add_is_pcf(label,'original',log_file=log_file)
-    add_critical_portrait(label,'original',log_file=log_file)
-    add_automorphism_group_NF(label,'original',log_file=log_file)
-    add_rational_preperiodic_points_NF(label,log_file=log_file)
+    label=add_function_NF(F, my_cursor, log_file=log_file)
+    add_citations_NF(label, citations, my_cursor, log_file=log_file)
+    add_sigma_inv_NF(label,my_cursor, 'original', 2, 3, log_file=log_file)
+    add_is_pcf(my_cursor, label,'original', log_file=log_file)
+    add_critical_portrait(label, my_cursor, 'original', log_file=log_file)
+    add_automorphism_group_NF(label, my_cursor, 'original', log_file=log_file)
+    add_rational_preperiodic_points_NF(label, my_cursor, log_file=log_file)
     #TODO: need to fix these
     if (F.base_ring().degree() == 1) and (label not in ['1.2.c8ddd2a7.1', '1.2.611af5d0.1', '1.2.7cb63904.1',\
         '1.2.0d94343e.1','1.2.beb83dd2.1','1.2.dd6fd9ae.1','1.2.4994c36e.1',\
         '1.2.98d76bdd.1', '1.3.423d4b7a.1']):
-        add_reduced_model_NF(label,log_file=log_file)
-    add_is_polynomial_NF(label,log_file=log_file)
-    add_monic_centered_model_NF(label,log_file=log_file)
-    add_chebyshev_model_NF(label,log_file=log_file)
-    add_newton_model_NF(label,log_file=log_file)
-    add_is_lattes_NF(label,log_file=log_file)
-    choose_display_model(label,log_file=log_file)
-    add_families_NF(label, log_file=log_file)
+        add_reduced_model_NF(label, my_cursor, log_file=log_file)
+    add_is_polynomial_NF(label, my_cursor, log_file=log_file)
+    add_monic_centered_model_NF(label, my_cursor, log_file=log_file)
+    add_chebyshev_model_NF(label, my_cursor, log_file=log_file)
+    add_newton_model_NF(label, my_cursor, log_file=log_file)
+    add_is_lattes_NF(label, my_cursor, log_file=log_file)
+    choose_display_model(label, my_cursor, log_file=log_file)
+    add_families_NF(label, my_cursor, log_file=log_file)
 
     return label
 

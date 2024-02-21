@@ -10,7 +10,7 @@ The code/functionality is written to be run under a SageMath kernel.
 On an existing 20.02 ubunutu install with release sage built from sage github
 (https://github.com/sagemath/sage.git)
 
-Install PostGreSQL
+# Install PostGreSQL
 sudo apt update
 sudo apt upgrade
 sudo apt install postgresql
@@ -56,12 +56,12 @@ Click on "Fork" to create your personal fork of the project
 # this creates your own person DAD repository. e.g., https://github.com/alice/DAD.git
 
 # clone the repository
-git clone git clone https://github.com/alice/DAD.git
+git clone git clone https://github.com/alice/Dynabase.git
 cd DAD
 git remote -v
 
 # add the remote as the upstream
-git remote add upstream https://github.com/bhutz/DAD.git
+git remote add upstream https://github.com/bhutz/Dynabase.git
 git remote -v
 
 # disable pushes to upstream instead of origin
@@ -72,8 +72,8 @@ git remote set-url --push upstream DISABLE
 # initialize as a git repository
 git init
 # add the remotes
-git remote add origin git@github.com:alice/DAD.git
-git remote add upstream git@github.com:bhutz/DAD.git
+git remote add origin git@github.com:alice/Dynabase.git
+git remote add upstream git@github.com:bhutz/Dynabase.git
 git remote -v
 # pull the repository
 git pull origin main

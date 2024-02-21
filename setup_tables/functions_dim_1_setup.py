@@ -45,9 +45,6 @@ my_cursor.execute("""
 DROP TYPE IF EXISTS newton_model_type CASCADE;
 """)
 my_cursor.execute("""
-DROP TYPE IF EXISTS sigma_invariants_type CASCADE;
-""")
-my_cursor.execute("""
 DROP TYPE IF EXISTS base_field_type CASCADE;
 """)
 
@@ -72,13 +69,13 @@ CREATE TYPE base_field_type AS (
   [field_label_length])
 
 
-my_cursor.execute("""
-CREATE TYPE sigma_invariants_type AS (
-    one      varchar[],
-    two      varchar[],
-    three    varchar[]
-  )
-""")
+#my_cursor.execute("""
+#CREATE TYPE sigma_invariants_type AS (
+#    one      varchar[],
+#    two      varchar[],
+#    three    varchar[]
+#  )
+#""")
 
 my_cursor.execute("""
 CREATE TYPE model_type AS (
@@ -116,13 +113,18 @@ CREATE TYPE newton_model_type AS (
 #  to make multiple entries per function more efficient?
 #Can we find the elliptic curve of Lattes?
 
+#ordinal is the final entry is the label
+
 my_cursor.execute("""
 CREATE TABLE functions_dim_1_NF (
-    label varchar(%s) PRIMARY KEY,
+    function_id serial PRIMARY KEY,
     degree integer,
     base_field_label varchar(%s),
     base_field_degree integer,
-    sigma_invariants sigma_invariants_type,
+    sigma_one varchar,
+    sigma_two varchar,
+    sigma_three varchar,
+    ordinal integer,
     citations integer[],
     family varchar[],
     original_model model_type,
@@ -144,16 +146,19 @@ CREATE TABLE functions_dim_1_NF (
     critical_portrait_structure integer[][2],
     critical_portrait_graph_id varchar
   )
-""",[function_label_length, field_label_length])
+""",[field_label_length])
 
 
 my_cursor.execute("""
 CREATE TABLE functions_dim_1_FF (
-    label varchar(%s) PRIMARY KEY,
+    id serial PRIMARY KEY,
     degree integer,
     base_field_label varchar(%s),
     base_field_degree integer,
-    sigma_invariants sigma_invariants_type,
+    sigma_one varchar,
+    sigma_two varchar,
+    sigma_three varchar,
+    ordinal integer,
     citations integer[],
     family varchar[],
     original_model model_type,
@@ -173,7 +178,7 @@ CREATE TABLE functions_dim_1_FF (
     rational_preperiodic_components integer[],
     avg_tail_length real
   )
-""",[function_label_length,field_label_length])
+""",[field_label_length])
 
 
 #edges are stored: index is the point and the value is the image
@@ -192,11 +197,11 @@ CREATE TABLE graphs_dim_1_NF (
 my_cursor.execute("""
 CREATE TABLE rational_preperiodic_dim_1_NF (
     id serial PRIMARY KEY,
-    function_label varchar(%s),
+    function_id integer,
     base_field_label varchar(%s),
     rational_periodic_points varchar[][2],
     graph_id integer
   )
-""",[function_label_length,field_label_length])
+""",[field_label_length])
 
 my_session.commit()

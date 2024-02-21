@@ -91,15 +91,15 @@ def normalize_family_NF(F, log_file=sys.stdout):
     else: #other field
         raise NotImplementedError('Can only normalize number fields with this function')
 
-def get_sage_family_NF(label, my_cursor, log_file=sys.stdout):
+def get_sage_family_NF(id, my_cursor, log_file=sys.stdout):
     """
     Given a label and a model name, return the sage dynamical system.
 
     """
     query={}
-    query['label']=label
+    query['family_id']=id
     my_cursor.execute("""SELECT model_coeffs, num_parameters, base_field_label FROM families_dim_1_NF
-        WHERE label=%(label)s
+        WHERE family_id=%(family_id)s
         """, query)
     G = my_cursor.fetchone()
     K = get_sage_field_NF(G['base_field_label'], my_cursor)
@@ -162,22 +162,30 @@ def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, bool_
     f['base_field_degree'] = int(base_field.degree())
     #f['base_field_emb'] = int(emb_index)
 
-    f['sigma_invariants.one']=[str(t) for t in F.sigma_invariants(1)]
-    sigma_hash = str(hashlib.shake_256(''.join(f['sigma_invariants.one']).encode('utf-8')).hexdigest(digest_length))
-    label = str(f['dimension']) +'.'+ str(f['degree']) + '.' + sigma_hash + '.1'
+    sig_one = [str(t) for t in F.sigma_invariants(1)]
+    sig_two = [str(t) for t in F.sigma_invariants(2)]
+    sig_three = [str(t) for t in F.sigma_invariants(3)]
+    f['sigma_one']=str(hashlib.shake_256(''.join(sig_one).encode('utf-8')).hexdigest(digest_length))
+    f['sigma_two']=str(hashlib.shake_256(''.join(sig_two).encode('utf-8')).hexdigest(digest_length))
+    f['sigma_three']=str(hashlib.shake_256(''.join(sig_three).encode('utf-8')).hexdigest(digest_length))
 
     #see if a conjugate is already in the database
-    log_file.write('Searching for functions: ' + label + ': ')
-    query = {'degree':f['degree'], 'sigma_invariants.one': f['sigma_invariants.one']}
+    log_file.write('Searching for functions: ' + str(list(F)) + ': ')
+    query = {'degree':f['degree'], 'sigma_one': f['sigma_one'],\
+            'sigma_two': f['sigma_two'], 'sigma_three': f['sigma_three']}
     my_cursor.execute("""SELECT * FROM families_dim_1_NF
         WHERE degree=%(degree)s AND
-            (sigma_invariants).one=%(sigma_invariants.one)s::varchar[]""",query)
+            sigma_one=%(sigma_one)s AND
+            sigma_two=%(sigma_two)s AND
+            sigma_three=%(sigma_three)s
+            """,query)
     if my_cursor.rowcount != 0:
-        F_id = my_cursor.fetchone()['label']
+        F_id = my_cursor.fetchone()['family_id']
         log_file.write('family already known : ' + str(list(F)) + ' as ' + F_id + '\n')
         return F_id
     # otherwise we'll add the function
-    f['label'] = label
+    # TODO have multiple families with the same sigmas
+    f['ordinal'] = 1
 
     #original model
     f['model_coeffs'] = [get_coefficients(g) for g in F]
@@ -185,52 +193,27 @@ def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, bool_
     log_file.write('model computed: \n')
 
     my_cursor.execute("""INSERT INTO families_dim_1_NF
-        (label, degree, num_parameters, model_coeffs, model_resultant,
-         base_field_label, base_field_degree, sigma_invariants.one)
+        (degree, num_parameters, model_coeffs, model_resultant, base_field_label, base_field_degree,
+            sigma_one, sigma_two, sigma_three, ordinal)
         VALUES
-        (%(label)s, %(degree)s, %(num_parameters)s, %(model_coeffs)s, %(model_resultant)s,
-         %(base_field_label)s, %(base_field_degree)s, %(sigma_invariants.one)s)
-        RETURNING label """,f)
+        (%(degree)s, %(num_parameters)s, %(model_coeffs)s, %(model_resultant)s, %(base_field_label)s,
+         %(base_field_degree)s, %(sigma_one)s,%(sigma_two)s,%(sigma_three)s,%(ordinal)s)
+        RETURNING family_id """,f)
     F_id = my_cursor.fetchone()[0]
     log_file.write('inserted: ' + str(list(F)) + ' as ' + str(F_id) + '\n')
-
-    # update sigmas
-    sigma = {}
-    sigma['label']=label
-    sigma.update({'two':[str(t) for t in F.sigma_invariants(2)]})
-    my_cursor.execute("""UPDATE families_dim_1_NF
-        SET sigma_invariants.two = %(two)s
-        WHERE label=%(label)s
-        """,sigma)
-    if my_cursor.rowcount == 0:
-        log_file.write('function ' + label + 'not found \n')
-        raise ValueError("function not found to update")
-    else:
-        log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for sigma.2\n')
-
-    sigma.update({'three':[str(t) for t in F.sigma_invariants(3)]})
-    my_cursor.execute("""UPDATE families_dim_1_NF
-        SET sigma_invariants.three = %(three)s
-        WHERE label=%(label)s
-        """,sigma)
-    if my_cursor.rowcount == 0:
-        log_file.write('sigma: function ' + label + 'not found \n')
-        raise ValueError("sigma: function not found to update")
-    else:
-        log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for sigma.3\n')
 
     # update booleans
     my_cursor.execute("""UPDATE families_dim_1_NF
         SET is_polynomial=%s,
             num_critical_points=%s,
             automorphism_group_cardinality=%s
-        WHERE label=%s
-        """,[is_poly, num_crit, num_aut, label])
+        WHERE family_id=%s
+        """,[is_poly, num_crit, num_aut, F_id])
 
     return F_id
 
 
-def add_citations_family_NF(label, citations, my_cursor, log_file=sys.stdout):
+def add_citations_family_NF(family_id, citations, my_cursor, log_file=sys.stdout):
     """
         Add the id of the citations for this family
     """
@@ -240,8 +223,8 @@ def add_citations_family_NF(label, citations, my_cursor, log_file=sys.stdout):
     my_cursor.execute("""SELECT
         citations
          FROM families_dim_1_NF
-        WHERE label=%s
-        """,[label])
+        WHERE family_id=%s
+        """,[family_id])
     #merge and sort the new list of citations
     if my_cursor.rowcount == 0:
         new_cites = sorted(citations)
@@ -251,9 +234,9 @@ def add_citations_family_NF(label, citations, my_cursor, log_file=sys.stdout):
             new_cites = sorted(citations)
         else:
             new_cites = sorted(list(set(cites+citations)))
-    log_file.write('new citations list for ' + label + ' is ' + str(new_cites) + '\n')
+    log_file.write('new citations list for ' + str(family_id) + ' is ' + str(new_cites) + '\n')
     my_cursor.execute("""UPDATE families_dim_1_NF
         SET citations = %s
         WHERE
-            label = %s
-        """, [new_cites, label])
+            family_id = %s
+        """, [new_cites, family_id])

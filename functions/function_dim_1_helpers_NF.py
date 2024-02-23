@@ -113,19 +113,18 @@ def model_in_database_NF(F, my_cursor, sigma_1=None, conj_fns=None, log_file=sys
     """
     if conj_fns is None:
         if sigma_1 is None:
-            sigma_1 = F.sigma_invariants(1)
-        query = {'degree':int(F.degree()),\
-            'sigma_invariants.one': [str(t) for t in sigma_1]}
+                s1 = [str(t) for t in F.sigma_invariants(1)]
+                sigma_1 = str(hashlib.shake_256(''.join(s1).encode('utf-8')).hexdigest(digest_length))
+        query = {'degree':int(F.degree()), 'sigma_one': sigma_1}
         my_cursor.execute("""SELECT
-            label,
+            function_id,
             (original_model).coeffs,(original_model).base_field_label,
             (monic_centered).coeffs,(monic_centered).base_field_label,
             (chebyshev_model).coeffs,(chebyshev_model).base_field_label,
             (reduced_model).coeffs,(reduced_model).base_field_label,
             (newton_model).coeffs,(newton_model).base_field_label
              FROM functions_dim_1_NF
-            WHERE degree=%(degree)s AND
-                (sigma_invariants).one=%(sigma_invariants.one)s::varchar[]""",query)
+            WHERE degree=%(degree)s AND sigma_one=%(sigma_one)s""",query)
         conj_fns = my_cursor.fetchall()
 
     model_names = ['original_model', 'monic_centered', 'chebyshev_model', 'reduced_model', 'newton_model']
@@ -141,32 +140,32 @@ def model_in_database_NF(F, my_cursor, sigma_1=None, conj_fns=None, log_file=sys
     return 0, '0'
 
 
-def get_sage_func_NF(label, model_name, my_cursor, log_file=sys.stdout):
+def get_sage_func_NF(function_id, model_name, my_cursor, log_file=sys.stdout):
     """
     Given a label and a model name, return the sage dynamical system.
 
     """
     query={}
-    query['label']=label
+    query['function_id']=function_id
     if model_name == 'original':
         my_cursor.execute("""SELECT (original_model).coeffs, (original_model).base_field_label FROM functions_dim_1_NF
-            WHERE label=%(label)s
+            WHERE function_id=%(function_id)s
             """, query)
     elif model_name == 'monic_centered':
         my_cursor.execute("""SELECT (monic_centered).coeffs, (monic_centered).base_field_label FROM functions_dim_1_NF
-            WHERE label=%(label)s
+            WHERE function_id=%(function_id)s
             """, query)
     elif model_name == 'chebyshev':
         my_cursor.execute("""SELECT (chebyshev_model).coeffs, (chebyshev_model).base_field_label FROM functions_dim_1_NF
-            WHERE label=%(label)s
+            WHERE function_id=%(function_id)s
             """, query)
     elif model_name == 'reduced':
         my_cursor.execute("""SELECT (reduced_model).coeffs, (reduced_model).base_field_label FROM functions_dim_1_NF
-            WHERE label=%(label)s
+            WHERE function_id=%(function_id)s
             """, query)
     elif model_name == 'newton':
         my_cursor.execute("""SELECT (newton_model).coeffs, (newton_model).base_field_label FROM functions_dim_1_NF
-            WHERE label=%(label)s
+            WHERE function_id=%(function_id)s
             """, query)
     G = my_cursor.fetchone()
 
@@ -241,30 +240,29 @@ def conj_in_database_NF(F, my_cursor, conj_fns=None, log_file=sys.stdout, timeou
     base_field = F.base_ring()
     query = {}
     query['degree'] = int(F.degree())
-    sigma_1 = [str(t) for t in F.sigma_invariants(1)]
-    query['sigma_invariants.one'] = sigma_1
+    s1 = [str(t) for t in F.sigma_invariants(1)]
+    sigma_1 = str(hashlib.shake_256(''.join(s1).encode('utf-8')).hexdigest(digest_length))
+    query['sigma_one'] = sigma_1
     if conj_fns is None:
         my_cursor.execute("""SELECT * FROM functions_dim_1_NF
-        WHERE degree=%(degree)s AND
-            (sigma_invariants).one=%(sigma_invariants.one)s::varchar[]""",query)
+        WHERE degree=%(degree)s AND sigma_one=%(sigma_one)s""",query)
         conj_fns = my_cursor.fetchall()
     if len(conj_fns) == 0:
         #nothing with the same sigma_1
         return 0, []
 
-    bool, g_label = model_in_database_NF(F, my_cursor, conj_fns=conj_fns, log_file=log_file)
+    bool, g_id = model_in_database_NF(F, my_cursor, conj_fns=conj_fns, log_file=log_file)
     if bool:
-        return 1, g_label
+        return 1, g_id
 
     #now check for twists/conjugates
     #sigma_2
-    sigma_2 = [str(t) for t in F.sigma_invariants(2)]
-    query['sigma_invariants.two'] = sigma_2
+    s2 = [str(t) for t in F.sigma_invariants(2)]
+    sigma_2 = str(hashlib.shake_256(''.join(s2).encode('utf-8')).hexdigest(digest_length))
+    query['sigma_two'] = sigma_2
     my_cursor.execute("""SELECT * FROM functions_dim_1_NF
         WHERE degree=%(degree)s AND
-            (sigma_invariants).one=%(sigma_invariants.one)s::varchar[] AND
-            ((sigma_invariants).two=%(sigma_invariants.two)s::varchar[] OR
-             (sigma_invariants).two IS NULL)""",query)
+            sigma_one=%(sigma_one)s AND sigma_two=%(sigma_two)s""",query)
     conj_fns = my_cursor.fetchall()
     if len(conj_fns) == 0:
         #nothing with the same sigma_1,sigma_2
@@ -278,14 +276,14 @@ def conj_in_database_NF(F, my_cursor, conj_fns=None, log_file=sys.stdout, timeou
             # TODO allow other models?
             twist_val = check_conjugates_NF(get_sage_func_NF(g[0], 'original', my_cursor),F)
             if twist_val == 1:
-                log_file.write('already there: conjugate found in db: ' + str(list(F)) + ' as ' + g[0] + '\n')
+                log_file.write('already there: conjugate found in db: ' + str(list(F)) + ' as ' + str(g[0]) + '\n')
                 cancel_alarm()
-                return 1, [g['label']]
+                return 1, [g['function_id']]
             elif twist_val == 2:
                 if g['rational_twists'] is None:
-                    twist_list = [g['label']]
+                    twist_list = [g['function_id']]
                 else:
-                    twist_list = g['rational_twists'] + [g['label']]
+                    twist_list = g['rational_twists'] + [g['function_id']]
                     twist_list.sort()
                 log_file.write('has twist in db: ' + str(list(F)) + ' as ' + str(twist_list) + '\n')
                 cancel_alarm()
@@ -360,16 +358,24 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
     #f['base_field_emb'] = int(emb_index)
 
     # TODO: What about labels for Lattes maps? Should it be based on cremona label?
-    f['sigma_invariants.one']=[str(t) for t in F.sigma_invariants(1)]
-    sigma_hash = str(hashlib.shake_256(''.join(f['sigma_invariants.one']).encode('utf-8')).hexdigest(digest_length))
-    label = str(f['dimension']) +'.'+ str(f['degree']) + '.' + sigma_hash + '.'
+    s1 = [str(t) for t in F.sigma_invariants(1)]
+    sigma_1 = str(hashlib.shake_256(''.join(s1).encode('utf-8')).hexdigest(digest_length))
+    s2 = [str(t) for t in F.sigma_invariants(2)]
+    sigma_2 = str(hashlib.shake_256(''.join(s2).encode('utf-8')).hexdigest(digest_length))
+    s3 = [str(t) for t in F.sigma_invariants(3)]
+    sigma_3 = str(hashlib.shake_256(''.join(s3).encode('utf-8')).hexdigest(digest_length))
+
+    f['sigma_one'] = sigma_1
+    f['sigma_two'] = sigma_2
+    f['sigma_three'] = sigma_3
 
     #see if a conjugate is already in the database
-    log_file.write('Searching for functions: ' + label + ': ')
-    query = {'degree':f['degree'], 'sigma_invariants.one': f['sigma_invariants.one']}
+    log_file.write('Searching for functions: ' + str(list(F)) + ': ')
+    query = {'degree':f['degree'], 'sigma_one': f['sigma_one'],\
+        'sigma_two': f['sigma_two'], 'sigma_three': f['sigma_three']}
     my_cursor.execute("""SELECT * FROM functions_dim_1_NF
-        WHERE degree=%(degree)s AND
-            (sigma_invariants).one=%(sigma_invariants.one)s::varchar[]""",query)
+        WHERE degree=%(degree)s AND sigma_one=%(sigma_one)s
+        AND sigma_two=%(sigma_two)s AND sigma_three=%(sigma_three)s""",query)
     conj_fns = my_cursor.fetchall()
     m = len(conj_fns)
     found, L = conj_in_database_NF(F, my_cursor, conj_fns=conj_fns, log_file=log_file, timeout=timeout)
@@ -377,11 +383,11 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
     if found == 1:
         #function or rational conjugate already there
         print(L)
-        log_file.write('function already known for : ' + L[0] + '\n')
+        log_file.write('function already known for : ' + str(L[0]) + '\n')
         return L[0]
     # otherwise we'll add the function
     # assume none are conjugate if we get to here
-    f['label'] = label + str(m+1)
+    f['ordinal'] = m+1
 
     #original model
     f['original_model.coeffs'] = [get_coefficients(g) for g in F]
@@ -405,103 +411,49 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
     log_file.write('original computed: \n')
 
     my_cursor.execute("""INSERT INTO functions_dim_1_NF
-        (label, degree, base_field_label, base_field_degree,
-         sigma_invariants.one,
+        (degree, base_field_label, base_field_degree,
+         sigma_one, sigma_two, sigma_three, ordinal,
          original_model.coeffs, original_model.resultant, original_model.bad_primes,
          original_model.height, original_model.base_field_label,
          original_model.conjugation_from_original,
          original_model.conjugation_from_original_base_field_label, display_model)
         VALUES
-        (%(label)s, %(degree)s, %(base_field_label)s, %(base_field_degree)s,
-         %(sigma_invariants.one)s,
+        (%(degree)s, %(base_field_label)s, %(base_field_degree)s,
+         %(sigma_one)s,%(sigma_two)s,%(sigma_three)s,%(ordinal)s,
          %(original_model.coeffs)s, %(original_model.resultant)s, %(original_model.bad_primes)s,
          %(original_model.height)s, %(original_model.base_field_label)s,
          %(original_model.conjugation_from_original)s,
          %(original_model.conjugation_from_original_base_field_label)s, %(display_model)s)
-        RETURNING label """,f)
+        RETURNING function_id """,f)
     F_id = my_cursor.fetchone()[0]
+    f['function_id'] = F_id
     log_file.write('inserted: ' + str(list(F)) + ' as ' + str(F_id) + '\n')
 
     if found == 2:
         #There is one or more twists in database
         f['twists'] = L
-        log_file.write('twist list: ' + str(L) + ' for ' + f['label'] + '\n')
+        log_file.write('twist list: ' + str(L) + ' for ' + str(f['function_id']) + '\n')
         my_cursor.execute("""UPDATE functions_dim_1_NF
                     SET rational_twists = %(twists)s
-                    WHERE label=%(label)s
+                    WHERE function_id=%(function_id)s
                     """,f)
-        for twist_label in L:
+        for twist_id in L:
             my_cursor.execute("""SELECT rational_twists FROM functions_dim_1_NF
-                WHERE label=%s """,[twist_label])
+                WHERE function_id=%s """,[twist_id])
             h = my_cursor.fetchone()
             twist_list = copy(L)
-            twist_list.remove(twist_label)
-            twist_list.append(f['label'])
+            twist_list.remove(twist_id)
+            twist_list.append(f['function_id'])
             twist_list.sort()
             my_cursor.execute("""UPDATE functions_dim_1_NF
                     SET rational_twists = %s
-                    WHERE label=%s
-                    """,[twist_list, twist_label])
-            log_file.write('updating twist list for: ' + twist_label + '\n')
+                    WHERE function_id=%s
+                    """,[twist_list, twist_id])
+            log_file.write('updating twist list for: ' + str(twist_id) + '\n')
     return F_id
 
 
-def add_sigma_inv_NF(label, my_cursor, model_name='original', start=2, end=3, log_file=sys.stdout, timeout=30):
-    """
-    Compute the sigma invariants for the given function specified either by label.
-
-    model specifies which model name to use for computation
-
-    action can be add/replace
-
-    #TODO add check to see if the sigma invariants are already known for 'add'
-    """
-    if timeout != 0:
-        alarm(timeout)
-    log_file.write('computing sigmas for : ' + label + ' from ' + str(start) + ' to ' + str(end) + '\n')
-    try:
-        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
-        sigma = {'label':label}
-        for k in range(start, end+1):
-            if k == 1:
-                raise ValueError("Cannot change sigma.one")
-            if k == 2:
-                sigma.update({'two':[str(t) for t in F.sigma_invariants(k)]})
-                my_cursor.execute("""UPDATE functions_dim_1_NF
-                    SET sigma_invariants.two = %(two)s
-                    WHERE label=%(label)s
-                    """,sigma)
-                if my_cursor.rowcount == 0:
-                    log_file.write('function ' + label + 'not found \n')
-                    raise ValueError("function not found to update")
-                else:
-                    log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for sigma.' + str(k) + '\n')
-            elif k == 3:
-                sigma.update({'three':[str(t) for t in F.sigma_invariants(k)]})
-                my_cursor.execute("""UPDATE functions_dim_1_NF
-                    SET sigma_invariants.three = %(three)s
-                    WHERE label=%(label)s
-                    """,sigma)
-                if my_cursor.rowcount == 0:
-                    log_file.write('sigma: function ' + label + 'not found \n')
-                    raise ValueError("sigma: function not found to update")
-                else:
-                    log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for sigma.' + str(k) + '\n')
-            else:
-                raise NotImplementedError("only upto k=3")
-
-        cancel_alarm()
-        return True
-    except (AlarmInterrupt, KeyboardInterrupt):
-        log_file.write('timeout: sigma inv for:' + str(timeout) + ':' + label + '\n')
-    except:
-        log_file.write('failure: sigma inv for:' + label + '\n')
-        raise
-
-    cancel_alarm()
-    return False
-
-def add_is_pcf(my_cursor, label=None, model_name='original', log_file=sys.stdout, timeout=30):
+def add_is_pcf(my_cursor, function_id=None, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if the given function (identified by label) is postcritically finite.
 
@@ -511,9 +463,9 @@ def add_is_pcf(my_cursor, label=None, model_name='original', log_file=sys.stdout
     if timeout != 0:
         alarm(timeout)
     try:
-        log_file.write('computing is_pcf for : ' + label + '\n')
-        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
-        pcf={'label':label}
+        log_file.write('computing is_pcf for : ' + str(function_id) + '\n')
+        F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
+        pcf={'function_id':function_id}
         try:
             is_pcf = F.is_postcritically_finite()
         except ValueError:
@@ -521,11 +473,11 @@ def add_is_pcf(my_cursor, label=None, model_name='original', log_file=sys.stdout
         pcf['is_pcf']=is_pcf
         my_cursor.execute("""UPDATE functions_dim_1_NF
                     SET is_pcf = %(is_pcf)s
-                    WHERE label=%(label)s
+                    WHERE function_id=%(function_id)s
                     """,pcf)
 
         if my_cursor.rowcount == 0:
-            log_file.write('PCF: function ' + label + 'not found \n')
+            log_file.write('PCF: function ' + str(function_id) + 'not found \n')
             raise ValueError("PCF: function not found to update")
         else:
             log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for is_pcf \n')
@@ -533,16 +485,16 @@ def add_is_pcf(my_cursor, label=None, model_name='original', log_file=sys.stdout
         cancel_alarm()
         return True
     except AlarmInterrupt:
-        log_file.write('timeout: is_pcf for:' + str(timeout) + ':' + label + '\n')
+        log_file.write('timeout: is_pcf for:' + str(timeout) + ':' + str(function_id) + '\n')
     except:
-        log_file.write('failure: is_pcf for:' + label + '\n')
+        log_file.write('failure: is_pcf for:' + str(function_id) + '\n')
         raise
 
     cancel_alarm()
     return False
 
 
-def add_critical_portrait(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
+def add_critical_portrait(function_id, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     If the function is pcf create the critical point portrait.
 
@@ -558,20 +510,20 @@ def add_critical_portrait(label, my_cursor, model_name='original', log_file=sys.
     if timeout != 0:
         alarm(timeout)
 
-    log_file.write('computing critical portrait for:' + label + '\n')
+    log_file.write('computing critical portrait for:' + str(function_id) + '\n')
     query={}
-    query['label']=label
+    query['function_id']=function_id
     my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF
-            WHERE label=%(label)s""",query)
+            WHERE function_id=%(function_id)s""",query)
     is_pcf = my_cursor.fetchone()['is_pcf']
     if not is_pcf:
-        log_file.write('critical portrait: not pcf:' + label + '\n')
+        log_file.write('critical portrait: not pcf:' + str(function_id) + '\n')
         return True
-        #raise ValueError('Function ' + label + ' not pcf')
+        #raise ValueError('Function ' + function_id + ' not pcf')
 
     cpp = []
     try:
-        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
+        F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
         g = F.critical_point_portrait()
         #TODO add graph_id information!!!
         ##query['critical_portrait_graph_id'] = TODO
@@ -587,11 +539,11 @@ def add_critical_portrait(label, my_cursor, model_name='original', log_file=sys.
         query['critical_portrait_structure'] = cpp
 
     except PariError:
-        log_file.write('pari error create critical portrait:' +  label + '\n')
+        log_file.write('pari error create critical portrait:' +  function_id + '\n')
         pass #ran out of memory pari.allocatemem(##) for more
         #or normal_form was not cooercible?
     except AlarmInterrupt:
-        log_file.write('timeout: create critical portrait:' + str(timeout) + ':' + label + '\n')
+        log_file.write('timeout: create critical portrait:' + str(timeout) + ':' + str(function_id) + '\n')
 
     if cpp != []:
         ##TODO add graph_id
@@ -600,27 +552,27 @@ def add_critical_portrait(label, my_cursor, model_name='original', log_file=sys.
                 post_critical_cardinality = %(post_critical_cardinality)s,
                 critical_portrait_components = %(critical_portrait_components)s,
                 critical_portrait_structure = %(critical_portrait_components)s
-            WHERE label=%(label)s
+            WHERE function_id=%(function_id)s
             """,query)
 
         cancel_alarm()
-        log_file.write('critical portrait added:' + label + '\n')
+        log_file.write('critical portrait added:' + str(function_id) + '\n')
         return True
     return False
 
 
-def add_automorphism_group_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
+def add_automorphism_group_NF(function_id, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Find the automorphisms group.
 
     """
     query={}
-    query['label']=label
+    query['function_id']=function_id
     if timeout != 0:
         alarm(timeout)
-    log_file.write('starting aut group for:' + label + '\n')
+    log_file.write('starting aut group for:' + str(function_id) + '\n')
     try:
-        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
+        F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
         try:
             Fbar = F.change_ring(QQbar)
         except ValueError:
@@ -630,16 +582,16 @@ def add_automorphism_group_NF(label, my_cursor, model_name='original', log_file=
         query['automorphism_group_cardinality'] = int(len(aut))
         my_cursor.execute("""UPDATE functions_dim_1_NF
             SET automorphism_group_cardinality = %(automorphism_group_cardinality)s
-            WHERE label=%(label)s
+            WHERE function_id=%(function_id)s
             """,query)
         #TODO check rowcount for success
         cancel_alarm()
-        log_file.write('aut group computed for:' + label + '\n')
+        log_file.write('aut group computed for:' + str(function_id) + '\n')
         return True
     except AlarmInterrupt:
-        log_file.write('timeout: aut group for:' + str(timeout) + ':' + f['label'] + '\n')
+        log_file.write('timeout: aut group for:' + str(timeout) + ':' + str(f['function_id']) + '\n')
     except:
-        log_file.write('failure: aut group for:' + label + '\n')
+        log_file.write('failure: aut group for:' + str(function_id) + '\n')
         raise
     cancel_alarm()
     return False
@@ -708,7 +660,7 @@ def identify_graph(G, f, my_cursor, log_file=sys.stdout):
     log_file.write('adding preperiodic graph to table: ' + str(graph_data['edges']) + '\n')
     return my_cursor.fetchone()[0]
 
-def add_rational_preperiodic_points_NF(label, my_cursor, model_name='original', field_label=None, log_file=sys.stdout, timeout=30):
+def add_rational_preperiodic_points_NF(function_id, my_cursor, model_name='original', field_label=None, log_file=sys.stdout, timeout=30):
     """
     Find the rational preperiodic points and add
 
@@ -729,13 +681,13 @@ def add_rational_preperiodic_points_NF(label, my_cursor, model_name='original', 
     if timeout != 0:
         alarm(timeout)
 
-    log_file.write('starting rational preperiodic points for:' + label + '\n')
+    log_file.write('starting rational preperiodic points for:' + str(function_id) + '\n')
     try:
         graph_data = {}
         preperiodic_data = {}
         query = {}
-        query['label']=label
-        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
+        query['function_id']=function_id
+        F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
         if field_label is None:
             K = F.base_ring()
             bool, field_label = field_in_database_NF(K, my_cursor, log_file=log_file)
@@ -754,7 +706,7 @@ def add_rational_preperiodic_points_NF(label, my_cursor, model_name='original', 
             preper = F.rational_preperiodic_graph()
         ## TODO: add graph_id
 
-        preperiodic_data['function_label'] = label
+        preperiodic_data['function_id'] = function_id
         preperiodic_data['base_field_label'] = field_label
         periodic = []
         for c in preper.all_simple_cycles():
@@ -769,25 +721,25 @@ def add_rational_preperiodic_points_NF(label, my_cursor, model_name='original', 
 
         #TODO check that it isn't already there
         my_cursor.execute("""INSERT INTO rational_preperiodic_dim_1_NF
-            (function_label, base_field_label, rational_periodic_points, graph_id)
+            (function_id, base_field_label, rational_periodic_points, graph_id)
             VALUES
-            (%(function_label)s, %(base_field_label)s, %(rational_periodic_points)s, %(graph_id)s)
+            (%(function_id)s, %(base_field_label)s, %(rational_periodic_points)s, %(graph_id)s)
             RETURNING id """,preperiodic_data)
 
         #TODO check rowcount for success
-        log_file.write('rational preperiodic points computed for:' + label + '\n')
+        log_file.write('rational preperiodic points computed for:' + str(function_id) + '\n')
         cancel_alarm()
         return True
     except AlarmInterrupt:
-        log_file.write('timeout: preperiodic points for:' + str(timeout) + ':' + label + '\n')
+        log_file.write('timeout: preperiodic points for:' + str(timeout) + ':' + str(function_id) + '\n')
     except:
-        log_file.write('failure: preperiodic points for:' + label + '\n')
+        log_file.write('failure: preperiodic points for:' + str(function_id) + '\n')
         raise
 
     cancel_alarm()
     return False
 
-def add_reduced_model_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
+def add_reduced_model_NF(function_id, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Compute the reduced model
 
@@ -804,10 +756,10 @@ def add_reduced_model_NF(label, my_cursor, model_name='original', log_file=sys.s
         alarm(timeout)
 
     query={}
-    query['label']=label
-    log_file.write('Computing reduced model for:' + label + '\n')
+    query['function_id']=function_id
+    log_file.write('Computing reduced model for:' + str(function_id) + '\n')
     try:
-        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
+        F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
         try:
             log_file.write('trying reduced with dynatomic \n')
             g, M = F.reduced_form(smallest_coeffs=True, dynatomic=True,\
@@ -851,22 +803,22 @@ def add_reduced_model_NF(label, my_cursor, model_name='original', log_file=sys.s
                 reduced_model.conjugation_from_original = %(reduced_model.conjugation_from_original)s,
                 reduced_model.conjugation_from_original_base_field_label = %(reduced_model.conjugation_from_original_base_field_label)s
             WHERE
-                label = %(label)s
+                function_id = %(function_id)s
             """, query)
-        log_file.write('reduced model computed: ' + label + '\n')
+        log_file.write('reduced model computed: ' + str(function_id) + '\n')
         cancel_alarm()
         #TODO check rowcount
         return True
 
     except AlarmInterrupt:
-        log_file.write('reduced model timeout: ' + str(timeout) + ':' + label + '\n')
+        log_file.write('reduced model timeout: ' + str(timeout) + ':' + str(function_id) + '\n')
     except:
-        log_file.write('reduced model failure: ' + label + '\n')
+        log_file.write('reduced model failure: ' + str(function_id) + '\n')
         raise
     cancel_alarm()
     return False
 
-def add_is_polynomial_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
+def add_is_polynomial_NF(function_id, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if the map is a polynomial map (totally ramified fixed point)
 
@@ -874,33 +826,33 @@ def add_is_polynomial_NF(label, my_cursor, model_name='original', log_file=sys.s
     """
     if timeout != 0:
         alarm(timeout)
-    log_file.write('starting is_polynomial for:' + label + '\n')
+    log_file.write('starting is_polynomial for:' + str(function_id) + '\n')
 
     try:
         query={}
-        query['label']=label
-        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
+        query['function_id']=function_id
+        F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
         is_poly = F.is_polynomial()
 
         query['is_polynomial'] = is_poly
         my_cursor.execute("""UPDATE functions_dim_1_NF
             SET is_polynomial = %(is_polynomial)s
-            WHERE label=%(label)s
+            WHERE function_id=%(function_id)s
             """,query)
         #TODO check rowcount for success
-        log_file.write('is polynomial computed: ' + label + '\n')
+        log_file.write('is polynomial computed: ' + str(function_id) + '\n')
         cancel_alarm()
         return True
 
     except AlarmInterrupt:
-        log_file.write('is_polynomial timeout: ' + str(timeout) + ':' + label + '\n')
+        log_file.write('is_polynomial timeout: ' + str(timeout) + ':' + str(function_id) + '\n')
     except:
-        log_file.write('is_polynomial failure: ' + label + '\n')
+        log_file.write('is_polynomial failure: ' + str(function_id) + '\n')
         raise
     cancel_alarm()
     return False
 
-def add_monic_centered_model_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
+def add_monic_centered_model_NF(function_id, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Compute the monic centered model.
 
@@ -920,13 +872,13 @@ def add_monic_centered_model_NF(label, my_cursor, model_name='original', log_fil
     if timeout != 0:
         alarm(timeout)
     query={}
-    query['label'] = label
+    query['function_id'] = function_id
 
-    my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where label = %(label)s""",query)
+    my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
     is_poly= my_cursor.fetchone()['is_polynomial']
     if is_poly is None:
-        add_is_polynomial_NF(label, my_cursor, model_name=model_name, log_file=log_file, timeout=timeout)
-        my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where label = %(label)s""",query)
+        add_is_polynomial_NF(function_id, my_cursor, model_name=model_name, log_file=log_file, timeout=timeout)
+        my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
         is_poly= my_cursor.fetchone()['is_polynomial']
     if not is_poly:
         cancel_alarm()
@@ -935,7 +887,7 @@ def add_monic_centered_model_NF(label, my_cursor, model_name='original', log_fil
 
     monic_centered = {}
     try:
-        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
+        F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
         N = F.domain().dimension()
         #todo fix normal form so this does not have to be special cased
         G,M,phi = F.normal_form(return_conjugation=True)
@@ -977,23 +929,23 @@ def add_monic_centered_model_NF(label, my_cursor, model_name='original', log_fil
                 monic_centered.conjugation_from_original = %(monic_centered.conjugation_from_original)s,
                 monic_centered.conjugation_from_original_base_field_label = %(monic_centered.conjugation_from_original_base_field_label)s
             WHERE
-                label = %(label)s
+                function_id = %(function_id)s
             """, query)
 
 
-        log_file.write('monic centered model computed: ' + label + '\n')
+        log_file.write('monic centered model computed: ' + str(function_id) + '\n')
         cancel_alarm()
         return True
 
     except AlarmInterrupt:
-        log_file.write('monic centered model timeout: ' + str(timeout) + ':' + label + '\n')
+        log_file.write('monic centered model timeout: ' + str(timeout) + ':' + str(function_id) + '\n')
     except:
-        log_file.write('monic centered model failure: ' + label + '\n')
+        log_file.write('monic centered model failure: ' + str(function_id) + '\n')
         raise
     cancel_alarm()
     return False
 
-def add_chebyshev_model_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
+def add_chebyshev_model_NF(function_id, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if chebyshev and compute the chebyshev model.
 
@@ -1013,13 +965,13 @@ def add_chebyshev_model_NF(label, my_cursor, model_name='original', log_file=sys
 
     """
     query={}
-    query['label']=label
-    log_file.write('starting chebyshev model for:' + label + '\n')
-    my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where label = %(label)s""",query)
+    query['function_id']=function_id
+    log_file.write('starting chebyshev model for:' + str(function_id) + '\n')
+    my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
     is_poly= my_cursor.fetchone()['is_polynomial']
     if is_poly is None:
-        add_is_polynomial_NF(label, model_name=model_name, log_file=log_file, timeout=timeout)
-        my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where label = %(label)s""",query)
+        add_is_polynomial_NF(function_id, model_name=model_name, log_file=log_file, timeout=timeout)
+        my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
         is_poly= my_cursor.fetchone()['is_polynomial']
     if not is_poly:
         cancel_alarm()
@@ -1028,17 +980,17 @@ def add_chebyshev_model_NF(label, my_cursor, model_name='original', log_file=sys
         my_cursor.execute("""UPDATE functions_dim_1_NF
             SET is_chebyshev = %(is_chebyshev)s
             WHERE
-                label = %(label)s
+                function_id = %(function_id)s
             """, query)
         #TODO check rowcount
-        log_file.write('chebyshev model done for:' + label + '\n')
+        log_file.write('chebyshev model done for:' + str(function_id) + '\n')
         return True
     #check if chebyshev - Milnor
-    my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where label = %(label)s""",query)
+    my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
     is_pcf= my_cursor.fetchone()['is_pcf']
     if is_pcf is None:
-        add_is_pcf(my_cursor, label, model_name=model_name, log_file=log_file, timeout=timeout)
-        my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where label = %(label)s""",query)
+        add_is_pcf(my_cursor, function_id, model_name=model_name, log_file=log_file, timeout=timeout)
+        my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
         is_pcf= my_cursor.fetchone()['is_pcf']
     if not is_pcf:
         cancel_alarm()
@@ -1047,15 +999,15 @@ def add_chebyshev_model_NF(label, my_cursor, model_name='original', log_file=sys
         my_cursor.execute("""UPDATE functions_dim_1_NF
             SET is_chebyshev = %(is_chebyshev)s
             WHERE
-                label = %(label)s
+                function_id = %(function_id)s
             """, query)
         #TODO check rowcount
-        log_file.write('chebyshev model done for:' + label + '\n')
+        log_file.write('chebyshev model done for:' + str(function_id) + '\n')
         return True
     try:
         if timeout != 0:
             alarm(timeout)
-        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
+        F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
         try:
             Fbar = F.change_ring(QQbar)
         except ValueError:
@@ -1086,16 +1038,16 @@ def add_chebyshev_model_NF(label, my_cursor, model_name='original', log_file=sys
             is_cheby = False
         query['is_chebyshev'] = is_cheby
         if not is_cheby:
-            log_file.write('not chebyshev:' + label + '\n')
+            log_file.write('not chebyshev:' + str(function_id) + '\n')
             my_cursor.execute("""UPDATE functions_dim_1_NF
             SET is_chebyshev = %(is_chebyshev)s
             WHERE
-                label = %(label)s
+                function_id = %(function_id)s
             """, query)
             #TODO check rowcount
             return True
         #else compute a chebyshev model
-        log_file.write('computing chebyshev model for:' + label + '\n')
+        log_file.write('computing chebyshev model for:' + str(function_id) + '\n')
         cheby_model = {}
         ch = F.domain().chebyshev_polynomial(d)
         conj_set = Fbar.conjugating_set(ch.change_ring(QQbar))
@@ -1139,24 +1091,24 @@ def add_chebyshev_model_NF(label, my_cursor, model_name='original', log_file=sys
                 chebyshev_model.conjugation_from_original_base_field_label = %(chebyshev_model.conjugation_from_original_base_field_label)s,
                 is_chebyshev = %(is_chebyshev)s
             WHERE
-                label = %(label)s
+                function_id = %(function_id)s
             """, query)
 
         cancel_alarm()
-        log_file.write('chebyshev model done for:' + label + '\n')
+        log_file.write('chebyshev model done for:' + str(function_id) + '\n')
         #TODO check rowcount
         return True
 
 
     except AlarmInterrupt:
-        log_file.write('chebyshev model timeout: ' + str(timeout) + ':' + label + '\n')
+        log_file.write('chebyshev model timeout: ' + str(timeout) + ':' + str(function_id) + '\n')
     except:
-        log_file.write('chebyshev model failure: ' + label + '\n')
+        log_file.write('chebyshev model failure: ' + str(function_id) + '\n')
         raise
     cancel_alarm()
     return False
 
-def add_newton_model_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
+def add_newton_model_NF(function_id, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if newton and compute the newton model.
     See 1510.02271 for a possible newton citation
@@ -1172,11 +1124,11 @@ def add_newton_model_NF(label, my_cursor, model_name='original', log_file=sys.st
     conjugation_from_original_base_field_label varchar(%s)
     """
     query={}
-    query['label']=label
-    log_file.write('starting newton model for:' + label + '\n')
+    query['function_id']=function_id
+    log_file.write('starting newton model for:' + str(function_id) + '\n')
     #check if newton map
     try:
-        F = get_sage_func_NF(label, model_name, my_cursor)
+        F = get_sage_func_NF(function_id, model_name, my_cursor)
         N = F.domain().dimension()
         if timeout != 0:
             alarm(timeout)
@@ -1188,11 +1140,11 @@ def add_newton_model_NF(label, my_cursor, model_name='original', log_file=sys.st
             my_cursor.execute("""UPDATE functions_dim_1_NF
                 SET is_newton = %(is_newton)s
                 WHERE
-                    label = %(label)s
+                    function_id = %(function_id)s
                 """, query)
             #TODO check rowcount
             cancel_alarm()
-            log_file.write('newton model done for:' + label + '\n')
+            log_file.write('newton model done for:' + str(function_id) + '\n')
             return True
         #else is newton
         try:
@@ -1269,38 +1221,38 @@ def add_newton_model_NF(label, my_cursor, model_name='original', log_file=sys.st
                 newton_model.polynomial_coeffs = %(newton_model.polynomial_coeffs)s,
                 is_newton = %(is_newton)s
             WHERE
-                label = %(label)s
+                function_id = %(function_id)s
             """, query)
 
         cancel_alarm()
-        log_file.write('newton model done for:' + label + '\n')
+        log_file.write('newton model done for:' + str(function_id) + '\n')
         #TODO check rowcount
         return True
 
     except AlarmInterrupt:
-        log_file.write('newton model timeout: ' + str(timeout) + ':' + label + '\n')
+        log_file.write('newton model timeout: ' + str(timeout) + ':' + str(function_id) + '\n')
     except:
-        log_file.write('newton model failure: ' + label + '\n')
+        log_file.write('newton model failure: ' + str(function_id) + '\n')
         raise
     cancel_alarm()
     return False
 
 
-def add_is_lattes_NF(label, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
+def add_is_lattes_NF(function_id, my_cursor, model_name='original', log_file=sys.stdout, timeout=30):
     """
     Determine if lattes. Updates is_pcf if not known
 
     'is_lattes'
     """
-    log_file.write('starting is lattes for:' + label + '\n')
+    log_file.write('starting is lattes for:' + str(function_id) + '\n')
     query={}
-    query['label']=label
+    query['function_id']=function_id
     # must be pcf
-    my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where label = %(label)s""",query)
+    my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
     is_pcf= my_cursor.fetchone()['is_pcf']
     if is_pcf is None:
-        add_is_pcf(my_cursor, label, model_name=model_name, log_file=log_file, timeout=timeout)
-        my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where label = %(label)s""",query)
+        add_is_pcf(my_cursor, function_id, model_name=model_name, log_file=log_file, timeout=timeout)
+        my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
         is_pcf= my_cursor.fetchone()['is_pcf']
     if not is_pcf:
         cancel_alarm()
@@ -1309,10 +1261,10 @@ def add_is_lattes_NF(label, my_cursor, model_name='original', log_file=sys.stdou
         my_cursor.execute("""UPDATE functions_dim_1_NF
             SET is_lattes = %(is_lattes)s
             WHERE
-                label = %(label)s
+                function_id = %(function_id)s
             """, query)
         #TODO check rowcount
-        log_file.write('lattes done for:' + label + '\n')
+        log_file.write('lattes done for:' + str(function_id) + '\n')
         return True
 
     #check if lattes map
@@ -1320,7 +1272,7 @@ def add_is_lattes_NF(label, my_cursor, model_name='original', log_file=sys.stdou
         if timeout != 0:
             alarm(timeout)
 
-        F = get_sage_func_NF(label, model_name, my_cursor, log_file=log_file)
+        F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
         d = ZZ(F.degree())
         try:
             Fbar = F.change_ring(QQbar)
@@ -1361,28 +1313,28 @@ def add_is_lattes_NF(label, my_cursor, model_name='original', log_file=sys.stdou
         my_cursor.execute("""UPDATE functions_dim_1_NF
             SET is_lattes = %(is_lattes)s
             WHERE
-                label = %(label)s
+                function_id = %(function_id)s
             """, query)
-        log_file.write('is lattes complete for ' + label + '\n')
+        log_file.write('is lattes complete for ' + str(function_id) + '\n')
         cancel_alarm()
         #TODO check rowcount
         return True
 
     except AlarmInterrupt:
-        log_file.write('is lattes timeout: ' + str(timeout) + ':' + label + '\n')
+        log_file.write('is lattes timeout: ' + str(timeout) + ':' + str(function_id) + '\n')
     except:
-        log_file.write('is lattes failure: ' + label + '\n')
+        log_file.write('is lattes failure: ' + str(function_id) + '\n')
         raise
     cancel_alarm()
     return False
 
-def add_citations_NF(label, citations, my_cursor, log_file=sys.stdout):
+def add_citations_NF(function_id, citations, my_cursor, log_file=sys.stdout):
     """
         Add the id of the citations for this functions
     """
     #make sure they are ints
     if citations == []:
-        log_file.write('no citations for ' + label + '\n')
+        log_file.write('no citations for ' + str(function_id) + '\n')
         return True
     num_cites = []
     for cite in citations:
@@ -1396,8 +1348,8 @@ def add_citations_NF(label, citations, my_cursor, log_file=sys.stdout):
     my_cursor.execute("""SELECT
         citations
          FROM functions_dim_1_NF
-        WHERE label=%s
-        """,[label])
+        WHERE function_id=%s
+        """,[function_id])
     #merge and sort the new list of citations
     if my_cursor.rowcount == 0:
         new_cites = sorted(num_cites)
@@ -1407,12 +1359,12 @@ def add_citations_NF(label, citations, my_cursor, log_file=sys.stdout):
             new_cites = sorted(num_cites)
         else:
             new_cites = sorted(list(set(cites+num_cites)))
-    log_file.write('new citations list for ' + label + ' is ' + str(new_cites) + '\n')
+    log_file.write('new citations list for ' + str(function_id) + ' is ' + str(new_cites) + '\n')
     my_cursor.execute("""UPDATE functions_dim_1_NF
         SET citations = %s
         WHERE
-            label = %s
-        """, [new_cites, label])
+            function_id = %s
+        """, [new_cites, function_id])
     log_file.write('done\n')
     return my_cursor.rowcount
 
@@ -1447,86 +1399,91 @@ def function_in_family_NF(f, F, maxk=3):
             return True,v
     return False,{}
 
-def add_families_NF(label, my_cursor, log_file=sys.stdout):
+def add_families_NF(function_id, my_cursor, log_file=sys.stdout):
     """
         Check if F is a member of any family in the table of families.
         Add those families to the record
     """
-    my_cursor.execute("""SELECT degree, base_field_label, (sigma_invariants).one,
-        (sigma_invariants).two, (sigma_invariants).three, family
-            FROM functions_dim_1_NF where label = %s""",[label])
+    my_cursor.execute("""SELECT degree, base_field_label, family
+            FROM functions_dim_1_NF where function_id = %s""",[function_id])
     if my_cursor.rowcount == 0:
-        log_file.write('No database entry for ' + label + '\n')
+        log_file.write('No database entry for ' + str(function_id) + '\n')
         return False
     func_vals = my_cursor.fetchone()
+    f = get_sage_func_NF(function_id, 'original', my_cursor)
     d = func_vals['degree']
     K = get_sage_field_NF(func_vals['base_field_label'], my_cursor)
     families = func_vals['family']
     if families is None:
         families = []
-    my_cursor.execute("""SELECT label, (sigma_invariants).one,
-        (sigma_invariants).two, (sigma_invariants).three,
-        base_field_label, num_parameters
+    my_cursor.execute("""SELECT family_id, base_field_label, num_parameters
             FROM families_dim_1_NF where degree = %s""",[d])
+    if my_cursor.rowcount == 0:
+        return False
+    f_sigmas = []
+    for k in range(1,4):
+        f_sigmas.append(f.sigma_invariants(k))
+
     for fam in my_cursor.fetchall():
+        F = get_sage_family_NF(fam['family_id'], my_cursor, log_file=sys.stdout)
         fam_sigmas = []
         func_sigmas = []
         # TODO: what if the function is defined over an extension of the family base field?
         # assume for now that the family is defined over QQ
-        S = PolynomialRing(K,fam['num_parameters'],'t')
+        S = PolynomialRing(K, fam['num_parameters'], 't')
         SF = FractionField(S)
-        for k in ['one','two','three']:
-            fam_sigmas.append([SF(v) for v in fam[k]])
-            func_sigmas.append([S(v) for v in func_vals[k]])
+        for k in [1, 2, 3]:
+            # compute the family sigmas and
+            # move the function sigmas to the same ring
+            fam_sigmas.append([SF(v) for v in F.sigma_invariants(k)])
+            func_sigmas.append([S(v) for v in f_sigmas[k-1]])
         L = []
         for k in range(len(fam_sigmas)):
             for i in range(len(fam_sigmas[k])):
                 L.append(func_sigmas[k][i]*fam_sigmas[k][i].denominator() - fam_sigmas[k][i].numerator())
         I = S.ideal(L)
-        f = get_sage_func_NF(label, 'original', my_cursor)
         phi_bar = K.embeddings(QQbar)[0]
         fbar = f.change_ring(phi_bar)
-        F = get_sage_family_NF(fam['label'], my_cursor).change_ring(S)
-        #return(I)
+        F = get_sage_family_NF(fam['family_id'], my_cursor).change_ring(S)
+
         for v in I.variety():
             print(v)
             g = F.specialization(v)
             gbar = g.change_ring(phi_bar)
             if fbar.is_conjugate(gbar):
-                families.append(fam['label'])
+                families.append(fam['family_id'])
         #remove any duplicates
         families = sorted(list(set(families)))
-        log_file.write('Updating families for ' + label + ' to ' + str(families) + '\n')
+        log_file.write('Updating families for ' + str(function_id) + ' to ' + str(families) + '\n')
         # TODO: merge citation lists too!
         my_cursor.execute("""UPDATE functions_dim_1_NF
             SET family = %s
-            WHERE label=%s
-            """,[families, label])
+            WHERE function_id=%s
+            """,[families, function_id])
 
 
 def add_function_all_NF(F, my_cursor, citations=[], log_file=sys.stdout):
     """
     add all entries for one dynamical system
     """
-    label=add_function_NF(F, my_cursor, log_file=log_file)
-    add_citations_NF(label, citations, my_cursor, log_file=log_file)
-    add_sigma_inv_NF(label,my_cursor, 'original', 2, 3, log_file=log_file)
-    add_is_pcf(my_cursor, label,'original', log_file=log_file)
-    add_critical_portrait(label, my_cursor, 'original', log_file=log_file)
-    add_automorphism_group_NF(label, my_cursor, 'original', log_file=log_file)
-    add_rational_preperiodic_points_NF(label, my_cursor, log_file=log_file)
+    F_id=add_function_NF(F, my_cursor, log_file=log_file)
+    add_citations_NF(F_id, citations, my_cursor, log_file=log_file)
+    add_is_pcf(my_cursor, F_id,'original', log_file=log_file)
+    add_critical_portrait(F_id, my_cursor, 'original', log_file=log_file)
+    add_automorphism_group_NF(F_id, my_cursor, 'original', log_file=log_file)
+    add_rational_preperiodic_points_NF(F_id, my_cursor, log_file=log_file)
     #TODO: need to fix these
-    if (F.base_ring().degree() == 1) and (label not in ['1.2.c8ddd2a7.1', '1.2.611af5d0.1', '1.2.7cb63904.1',\
+    if (F.base_ring().degree() == 1) and (F_id not in ['1.2.c8ddd2a7.1', '1.2.611af5d0.1', '1.2.7cb63904.1',\
         '1.2.0d94343e.1','1.2.beb83dd2.1','1.2.dd6fd9ae.1','1.2.4994c36e.1',\
         '1.2.98d76bdd.1', '1.3.423d4b7a.1']):
-        add_reduced_model_NF(label, my_cursor, log_file=log_file)
-    add_is_polynomial_NF(label, my_cursor, log_file=log_file)
-    add_monic_centered_model_NF(label, my_cursor, log_file=log_file)
-    add_chebyshev_model_NF(label, my_cursor, log_file=log_file)
-    add_newton_model_NF(label, my_cursor, log_file=log_file)
-    add_is_lattes_NF(label, my_cursor, log_file=log_file)
-    choose_display_model(label, my_cursor, log_file=log_file)
-    add_families_NF(label, my_cursor, log_file=log_file)
+        add_reduced_model_NF(F_id, my_cursor, log_file=log_file)
+    add_is_polynomial_NF(F_id, my_cursor, log_file=log_file)
+    add_monic_centered_model_NF(F_id, my_cursor, log_file=log_file)
+    add_chebyshev_model_NF(F_id, my_cursor, log_file=log_file)
+    add_newton_model_NF(F_id, my_cursor, log_file=log_file)
+    add_is_lattes_NF(F_id, my_cursor, log_file=log_file)
+    choose_display_model(F_id, my_cursor, log_file=log_file)
+    add_families_NF(F_id, my_cursor, log_file=log_file)
 
-    return label
+    return F_id
 

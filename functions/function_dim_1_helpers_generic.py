@@ -63,7 +63,7 @@ def get_post_critical(Fbar):
            images_needed.append(Q2)
     return crit, list(post_crit)
 
-def choose_display_model(label, my_cursor, log_file=sys.stdout):
+def choose_display_model(function_id, my_cursor, log_file=sys.stdout):
     """
     From the list of computed models set one as display.
     If the model required a field extension over original, then it is not chosen.
@@ -76,63 +76,63 @@ def choose_display_model(label, my_cursor, log_file=sys.stdout):
     """
     #determine which to display
     query={}
-    query['label']=label
-    my_cursor.execute("""SELECT (original_model).base_field_label FROM functions_dim_1_NF where label = %(label)s""", query)
+    query['function_id']=function_id
+    my_cursor.execute("""SELECT (original_model).base_field_label FROM functions_dim_1_NF where function_id = %(function_id)s""", query)
     original_field_label = my_cursor.fetchone()['base_field_label']
-    my_cursor.execute("""SELECT is_chebyshev FROM functions_dim_1_NF where label = %(label)s""",query)
+    my_cursor.execute("""SELECT is_chebyshev FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
     is_cheby = my_cursor.fetchone()['is_chebyshev']
     if is_cheby:
         query['display_model'] = 'chebyshev'
         my_cursor.execute("""UPDATE functions_dim_1_NF
             SET display_model = %(display_model)s
             WHERE
-                label = %(label)s
+                function_id = %(function_id)s
             """, query)
         return True
-    my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where label = %(label)s""",query)
+    my_cursor.execute("""SELECT is_polynomial FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
     is_poly = my_cursor.fetchone()['is_polynomial']
     if is_poly:
-        my_cursor.execute("""SELECT (monic_centered).base_field_label FROM functions_dim_1_NF where label = %(label)s""",query)
+        my_cursor.execute("""SELECT (monic_centered).base_field_label FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
         mc_field_label = my_cursor.fetchone()['base_field_label']
         if original_field_label == mc_field_label:
             query['display_model'] = 'monic centered'
             my_cursor.execute("""UPDATE functions_dim_1_NF
                 SET display_model = %(display_model)s
                 WHERE
-                    label = %(label)s
+                    function_id = %(function_id)s
                 """, query)
             return True
-    my_cursor.execute("""SELECT (reduced_model).coeffs FROM functions_dim_1_NF where label = %(label)s""",query)
+    my_cursor.execute("""SELECT (reduced_model).coeffs FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
     my_coeffs = my_cursor.fetchone()['coeffs']
     if not my_coeffs is None:
-        my_cursor.execute("""SELECT (reduced_model).base_field_label FROM functions_dim_1_NF where label = %(label)s""",query)
+        my_cursor.execute("""SELECT (reduced_model).base_field_label FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
         red_field_label = my_cursor.fetchone()['base_field_label']
         if original_field_label == red_field_label:
             query['display_model'] = 'reduced'
             my_cursor.execute("""UPDATE functions_dim_1_NF
                 SET display_model = %(display_model)s
                 WHERE
-                    label = %(label)s
+                    function_id = %(function_id)s
                 """, query)
             return True
-    my_cursor.execute("""SELECT (newton_model).coeffs FROM functions_dim_1_NF where label = %(label)s""",query)
+    my_cursor.execute("""SELECT (newton_model).coeffs FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
     my_coeffs = my_cursor.fetchone()['coeffs']
     if not my_coeffs is None:
-        my_cursor.execute("""SELECT (newton_model).base_field_label FROM functions_dim_1_NF where label = %(label)s""",query)
+        my_cursor.execute("""SELECT (newton_model).base_field_label FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
         new_field_label = my_cursor.fetchone()['base_field_label']
         if original_field_label == new_field_label:
             query['display_model'] = 'newton'
             my_cursor.execute("""UPDATE functions_dim_1_NF
                 SET display_model = %(display_model)s
                 WHERE
-                    label = %(label)s
+                    function_id = %(function_id)s
                 """, query)
             return True
     query['display_model'] = 'original'
     my_cursor.execute("""UPDATE functions_dim_1_NF
         SET display_model = %(display_model)s
         WHERE
-            label = %(label)s
+            function_id = %(function_id)s
         """, query)
     return True
 

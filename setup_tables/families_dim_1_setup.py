@@ -34,20 +34,23 @@ my_cursor.execute("""
 
 my_cursor.execute("""
 CREATE TABLE families_dim_1_NF (
-    label varchar(%s) PRIMARY KEY,
+    family_id serial PRIMARY KEY,
     degree integer,
     num_parameters integer,
     model_coeffs varchar[],
     model_resultant varchar,
     base_field_label varchar(%s),
     base_field_degree integer,
-    sigma_invariants sigma_invariants_type,
+    sigma_one varchar,
+    sigma_two varchar,
+    sigma_three varchar,
+    ordinal integer,
     citations integer[],
     is_polynomial boolean,
     num_critical_points integer,
     automorphism_group_cardinality integer
     )
-""",[function_label_length, field_label_length])
+""",[field_label_length])
 
 
 my_session.commit()

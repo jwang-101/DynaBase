@@ -56,10 +56,12 @@ for s1 in QQ.range_by_height(B):
     print("s1:",s1, " count:",count)
     my_session.commit()
     for s2 in QQ.range_by_height(B):
-        count += 1
-        F=DynamicalSystem([x**3 + s1*x*y**2 + s2*y**3, y**3])
-        if not model_in_database_NF(F, my_cursor)[0]:
-            label = add_function_all_NF(F, my_cursor, citations=['Benedetto2009'], log_file=log_file)
+        # need to fix these (timeout)
+        if (s1,s2) not in [(2,0)]:
+            count += 1
+            F=DynamicalSystem([x**3 + s1*x*y**2 + s2*y**3, y**3])
+            if not model_in_database_NF(F, my_cursor)[0]:
+                label = add_function_all_NF(F, my_cursor, citations=['Benedetto2009'], log_file=log_file)
 
 my_session.commit()
 

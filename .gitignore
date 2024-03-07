@@ -1,3 +1,8 @@
 # directories to ignore
 __pycache__/
 .ipynb_checkpoints/
+*log.txt
+*.ipynb
+sample_data.sage.py
+database.ini
+

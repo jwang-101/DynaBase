@@ -3,15 +3,19 @@
 
 import psycopg2
 import psycopg2.extras
+
+from config import load_config
+
+config = load_config()
 try:
-    my_session = psycopg2.connect(database="dad",
-                        host="localhost",
-                        user="dad_user",
-                        password="dad_pass",
-                        port="5432")
-except:
-    print("Unable to connect to the database") 
-    
+    # connecting to the PostgreSQL server
+    my_session = psycopg2.connect(**config)
+    print('Connected to the PostgreSQL server.')
+
+except (psycopg2.DatabaseError, Exception) as error:
+    print(error)
+
+
 my_cursor = my_session.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
 

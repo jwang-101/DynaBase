@@ -20,7 +20,7 @@ AUTHORS:
 
 
 from copy import copy
-
+from cypari2.handle_error import PariError
 from sage.categories.function_fields import FunctionFields
 from sage.dynamics.arithmetic_dynamics.generic_ds import DynamicalSystem
 from sage.matrix.constructor import matrix
@@ -66,6 +66,7 @@ from functions.function_dim_1_helpers_generic import array_to_graph
 #  Functionality for working with functions over number fields
 ##############################################################
 
+from fields.field_helpers_NF import add_field_NF
 from fields.field_helpers_NF import normalize_field_NF
 from fields.field_helpers_NF import field_in_database_NF
 from fields.field_helpers_NF import get_sage_field_NF
@@ -347,7 +348,7 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
     K_id = K_id
     if not bool:
         if bool_add_field:
-            K_id = add_field_NF(base_field, log_file=log_file)
+            K_id = add_field_NF(base_field, my_cursor, log_file=log_file)
         else:
             log_file.write('Could not add : ' + str(list(F)) + ' because ' + str(base_field) + ' not in database \n')
             raise ValueError("base_field not in database")
@@ -382,7 +383,8 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
 
     if found == 1:
         #function or rational conjugate already there
-        print(L)
+        #print(L)
+        #print('function already known for : ' + str(L[0]) + '\n')
         log_file.write('function already known for : ' + str(L[0]) + '\n')
         return L[0]
     # otherwise we'll add the function
@@ -453,7 +455,7 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
     return F_id
 
 
-def add_is_pcf(my_cursor, function_id=None, model_name='original', log_file=sys.stdout, timeout=30):
+def add_is_pcf(my_cursor, function_id=None, model_name='original', bool_add_field=False, log_file=sys.stdout, timeout=30):
     """
     Determine if the given function (identified by label) is postcritically finite.
 
@@ -471,8 +473,23 @@ def add_is_pcf(my_cursor, function_id=None, model_name='original', log_file=sys.
         except ValueError:
             is_pcf = F.is_postcritically_finite(embedding=F.base_ring().embeddings(QQbar)[0])
         pcf['is_pcf']=is_pcf
+        K, phi = F.field_of_definition_critical(return_embedding=True)
+        L, psi = normalize_field_NF(K, log_file=log_file)
+        bool, L_id = field_in_database_NF(L, my_cursor)
+        if not bool:
+            if bool_add_field:
+                L_id = add_field_NF(L, my_cursor, log_file=log_file)
+            else:
+                log_file.write('Could not add crtical point information for : ' + str(list(F)) + ' because ' + str(L) + ' not in database \n')
+                raise ValueError("base_field not in database")
+        F_cp = F.change_ring(psi*phi)
+        cp = F_cp.critical_points()
+        pcf['cp_cardinality'] = len(cp)
+        pcf['cp_field_of_defn'] = L_id
         my_cursor.execute("""UPDATE functions_dim_1_NF
-                    SET is_pcf = %(is_pcf)s
+                    SET is_pcf = %(is_pcf)s,
+                        cp_cardinality = %(cp_cardinality)s,
+                        cp_field_of_defn = %(cp_field_of_defn)s
                     WHERE function_id=%(function_id)s
                     """,pcf)
 
@@ -521,22 +538,19 @@ def add_critical_portrait(function_id, my_cursor, model_name='original', log_fil
         return True
         #raise ValueError('Function ' + function_id + ' not pcf')
 
-    cpp = []
     try:
         F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
         g = F.critical_point_portrait()
-        #TODO add graph_id information!!!
-        ##query['critical_portrait_graph_id'] = TODO
-        try:
-            Fbar = F.change_ring(QQbar)
-        except ValueError:
-            Fbar = F.change_ring(F.base_ring().embeddings(QQbar)[0])
-        for q in Fbar.critical_points():
-            cpp.append(q.is_preperiodic(Fbar,return_period=True))
-        query['critical_portrait_cardinality'] = int(len(g.vertices()))
-        query['post_critical_cardinality'] = len([t for t in g.in_degree() if t != 0])
-        query['critical_portrait_components'] = [int(t) for t in g.connected_components_sizes()]
-        query['critical_portrait_structure'] = cpp
+
+        #identify graph and add if necessary
+        query['critical_portrait_graph_id'] = identify_graph(g, F, my_cursor, 2, log_file=log_file)
+        my_cursor.execute("""UPDATE functions_dim_1_NF
+            SET critical_portrait_graph_id = %(critical_portrait_graph_id)s
+            WHERE function_id=%(function_id)s
+            """,query)
+        cancel_alarm()
+        log_file.write('critical portrait added:' + str(function_id) + '\n')
+        return True
 
     except PariError:
         log_file.write('pari error create critical portrait:' +  function_id + '\n')
@@ -545,19 +559,6 @@ def add_critical_portrait(function_id, my_cursor, model_name='original', log_fil
     except AlarmInterrupt:
         log_file.write('timeout: create critical portrait:' + str(timeout) + ':' + str(function_id) + '\n')
 
-    if cpp != []:
-        ##TODO add graph_id
-        my_cursor.execute("""UPDATE functions_dim_1_NF
-            SET critical_portrait_cardinality = %(critical_portrait_cardinality)s,
-                post_critical_cardinality = %(post_critical_cardinality)s,
-                critical_portrait_components = %(critical_portrait_components)s,
-                critical_portrait_structure = %(critical_portrait_components)s
-            WHERE function_id=%(function_id)s
-            """,query)
-
-        cancel_alarm()
-        log_file.write('critical portrait added:' + str(function_id) + '\n')
-        return True
     return False
 
 
@@ -596,19 +597,20 @@ def add_automorphism_group_NF(function_id, my_cursor, model_name='original', log
     cancel_alarm()
     return False
 
-def identify_graph(G, f, my_cursor, log_file=sys.stdout):
+def identify_graph(G, f, my_cursor, type, log_file=sys.stdout):
     """
     determine if the digraph is already in the table and returns it's graph_id
 
     If it is not in the table, then add it.
 
-    G is the graph of perperiodic points
+    G is the graph of perperiodic or critical points
     f is the fuction
     """
     graph_data = {}
     graph_data['cardinality'] = len(G.vertices())
     graph_data['preperiodic_components'] = G.connected_components_sizes()
     graph_data['num_components'] = len(G.connected_components())
+    graph_data['positive_in_degree'] = len([t for t in G.in_degree() if t != 0])
     periodic = set()
     for T in G.all_simple_cycles():
         periodic=periodic.union(set(T))
@@ -621,19 +623,16 @@ def identify_graph(G, f, my_cursor, log_file=sys.stdout):
         periodic_cycles.append(int(num_periodic))
     graph_data['periodic_cycles'] = periodic_cycles
     max_tail = 0
-    t = 0
-    for Q in G.vertices():
-        if G.in_degree(Q) == 0:
-            t = 0
-            while Q not in periodic:
-                t += 1
-                Q = f(Q)
-            if t > max_tail:
-                max_tail = t
+    for t in G.all_simple_paths():
+        i=0
+        while t[i] not in periodic and i != len(t)-1:
+            i+=1
+        if i > max_tail:
+            max_tail = i
     graph_data['max_tail'] = int(max_tail)
     #check whether the graph is in the table
     my_cursor.execute("""SELECT
-         graph_id, edges
+         graph_id, edges, type
          FROM graphs_dim_1_NF
         WHERE cardinality=%(cardinality)s AND
             periodic_cycles = %(periodic_cycles)s AND
@@ -645,17 +644,27 @@ def identify_graph(G, f, my_cursor, log_file=sys.stdout):
     for row in my_cursor.fetchall():
         G_graph = array_to_graph(row['edges'])
         if G_graph.is_isomorphic(G):
-            log_file.write('preperiodic graph already in table: ' + str(row['graph_id']) + '\n')
+            log_file.write('graph already in table: ' + str(row['graph_id']) + '\n')
+            if row['type']&type == 0:  #bitwise and
+                #need to update
+                new_type = row['type'] | type #bitwise or
+                my_cursor.execute("""UPDATE graphs_dim_1_NF
+                SET type = %s
+                WHERE
+                    graph_id = %s
+                """, [new_type, row['graph_id']])
+                log_file.write('updated type for ' + str(row['graph_id']) + '\n')
             return row['graph_id']
     # the graph is not in the table, so add it
     # edges relabels to graph verticies so this has to be done last
     graph_data['edges'] = graph_to_array(G)
+    graph_data['type'] = type
     my_cursor.execute("""INSERT INTO graphs_dim_1_NF
         (cardinality, edges, num_components, periodic_cycles,
-         preperiodic_components, max_tail)
+         preperiodic_components, positive_in_degree, max_tail, type)
         VALUES
         (%(cardinality)s, %(edges)s, %(num_components)s, %(periodic_cycles)s,
-         %(preperiodic_components)s, %(max_tail)s)
+         %(preperiodic_components)s, %(positive_in_degree)s, %(max_tail)s, %(type)s)
         RETURNING graph_id """,graph_data)
     log_file.write('adding preperiodic graph to table: ' + str(graph_data['edges']) + '\n')
     return my_cursor.fetchone()[0]
@@ -708,6 +717,15 @@ def add_rational_preperiodic_points_NF(function_id, my_cursor, model_name='origi
 
         preperiodic_data['function_id'] = function_id
         preperiodic_data['base_field_label'] = field_label
+        #check if its already there:
+        my_cursor.execute("""SELECT
+            id FROM rational_preperiodic_dim_1_NF
+            WHERE function_id=%(function_id)s AND base_field_label=%(base_field_label)s"""
+            , preperiodic_data)
+        if my_cursor.rowcount != 0:
+            log_file.write('rational preperiodic points already known for:' + str(function_id) + '\n')
+            cancel_alarm()
+            return True
         periodic = []
         for c in preper.all_simple_cycles():
             periodic.append([str(t) for t in c[0]])
@@ -716,7 +734,7 @@ def add_rational_preperiodic_points_NF(function_id, my_cursor, model_name='origi
         # TODO: needs to be the same order as the components are listed in the graph table
 
         #identify graph and add if necessary
-        graph_id = identify_graph(preper, F, my_cursor, log_file=log_file)
+        graph_id = identify_graph(preper, F, my_cursor, 1, log_file=log_file)
         preperiodic_data['graph_id'] = graph_id
 
         #TODO check that it isn't already there
@@ -989,7 +1007,7 @@ def add_chebyshev_model_NF(function_id, my_cursor, model_name='original', log_fi
     my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
     is_pcf= my_cursor.fetchone()['is_pcf']
     if is_pcf is None:
-        add_is_pcf(my_cursor, function_id, model_name=model_name, log_file=log_file, timeout=timeout)
+        add_is_pcf(my_cursor, function_id, model_name=model_name, bool_add_field=True, log_file=log_file, timeout=timeout)
         my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
         is_pcf= my_cursor.fetchone()['is_pcf']
     if not is_pcf:
@@ -1251,7 +1269,7 @@ def add_is_lattes_NF(function_id, my_cursor, model_name='original', log_file=sys
     my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
     is_pcf= my_cursor.fetchone()['is_pcf']
     if is_pcf is None:
-        add_is_pcf(my_cursor, function_id, model_name=model_name, log_file=log_file, timeout=timeout)
+        add_is_pcf(my_cursor, function_id, model_name=model_name, bool_add_field=True, log_file=log_file, timeout=timeout)
         my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
         is_pcf= my_cursor.fetchone()['is_pcf']
     if not is_pcf:
@@ -1468,7 +1486,7 @@ def add_function_all_NF(F, my_cursor, citations=[], log_file=sys.stdout):
     """
     F_id=add_function_NF(F, my_cursor, log_file=log_file)
     add_citations_NF(F_id, citations, my_cursor, log_file=log_file)
-    add_is_pcf(my_cursor, F_id,'original', log_file=log_file)
+    add_is_pcf(my_cursor, F_id,'original', bool_add_field=True, log_file=log_file)
     add_critical_portrait(F_id, my_cursor, 'original', log_file=log_file)
     add_automorphism_group_NF(F_id, my_cursor, 'original', log_file=log_file)
     add_rational_preperiodic_points_NF(F_id, my_cursor, log_file=log_file)

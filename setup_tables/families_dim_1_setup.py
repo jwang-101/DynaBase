@@ -35,6 +35,7 @@ my_cursor.execute("""
 my_cursor.execute("""
 CREATE TABLE families_dim_1_NF (
     family_id serial PRIMARY KEY,
+    name varchar,
     degree integer,
     num_parameters integer,
     model_coeffs varchar[],
@@ -51,6 +52,8 @@ CREATE TABLE families_dim_1_NF (
     automorphism_group_cardinality integer
     )
 """,[field_label_length])
+
+# add descriptive name
 
 
 my_session.commit()

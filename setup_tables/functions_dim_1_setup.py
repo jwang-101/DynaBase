@@ -138,15 +138,13 @@ CREATE TABLE functions_dim_1_NF (
     is_newton boolean,
     is_lattes boolean,
     is_pcf boolean,
+    cp_cardinality integer,
+    cp_field_of_defn varchar(%s),
     automorphism_group_cardinality integer,
     rational_twists integer[],
-    critical_portrait_cardinality integer,
-    post_critical_cardinality integer,
-    critical_portrait_components integer[],
-    critical_portrait_structure integer[][2],
     critical_portrait_graph_id varchar
   )
-""",[field_label_length])
+""",[field_label_length,field_label_length])
 
 
 my_cursor.execute("""
@@ -182,6 +180,9 @@ CREATE TABLE functions_dim_1_FF (
 
 
 #edges are stored: index is the point and the value is the image
+# type = 1 preperiodic
+# type = 2 pcf
+# type = 3 both
 my_cursor.execute("""
 CREATE TABLE graphs_dim_1_NF (
     graph_id serial PRIMARY KEY,
@@ -190,8 +191,12 @@ CREATE TABLE graphs_dim_1_NF (
     num_components integer,
     periodic_cycles integer[],
     preperiodic_components integer[],
-    max_tail integer
+    positive_in_degree integer,
+    max_tail integer,
+    type integer
   )""")
+
+
 
 #need to make sure the points are stored in the same order as the components
 my_cursor.execute("""

@@ -121,7 +121,7 @@ def get_sage_family_NF(id, my_cursor, log_file=sys.stdout):
     return DynamicalSystem(polys, domain=P)
 
 
-def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, bool_add_field=False, log_file=sys.stdout, timeout=30):
+def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, name=None, bool_add_field=False, log_file=sys.stdout, timeout=30):
     """
     Give a family of sage functions F, determine it's label and add it to the database.
 
@@ -147,6 +147,8 @@ def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, bool_
 
     base_field = F.base_ring().base_ring()
     f['num_parameters'] = int(base_field.ngens())
+
+    f['name'] = name
 
     bool, K_id = field_in_database_NF(base_field, my_cursor)
     K_id = K_id
@@ -193,10 +195,10 @@ def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, bool_
     log_file.write('model computed: \n')
 
     my_cursor.execute("""INSERT INTO families_dim_1_NF
-        (degree, num_parameters, model_coeffs, model_resultant, base_field_label, base_field_degree,
+        (name, degree, num_parameters, model_coeffs, model_resultant, base_field_label, base_field_degree,
             sigma_one, sigma_two, sigma_three, ordinal)
         VALUES
-        (%(degree)s, %(num_parameters)s, %(model_coeffs)s, %(model_resultant)s, %(base_field_label)s,
+        (%(name)s, %(degree)s, %(num_parameters)s, %(model_coeffs)s, %(model_resultant)s, %(base_field_label)s,
          %(base_field_degree)s, %(sigma_one)s,%(sigma_two)s,%(sigma_three)s,%(ordinal)s)
         RETURNING family_id """,f)
     F_id = my_cursor.fetchone()[0]

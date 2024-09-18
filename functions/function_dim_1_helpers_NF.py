@@ -1437,7 +1437,7 @@ def add_families_NF(function_id, my_cursor, log_file=sys.stdout):
     if my_cursor.rowcount == 0:
         return False
     f_sigmas = []
-    for k in range(1,4): #do i hafta change something for this...?
+    for k in range(1,3): #do i hafta change something for this...?
         f_sigmas.append(f.sigma_invariants(k))
 
     for fam in my_cursor.fetchall():
@@ -1448,7 +1448,7 @@ def add_families_NF(function_id, my_cursor, log_file=sys.stdout):
         # assume for now that the family is defined over QQ
         S = PolynomialRing(K, fam['num_parameters'], 't')
         SF = FractionField(S)
-        for k in [1, 2, 3]:
+        for k in [1, 2]:
             # compute the family sigmas and
             # move the function sigmas to the same ring
             fam_sigmas.append([SF(v) for v in F.sigma_invariants(k)])

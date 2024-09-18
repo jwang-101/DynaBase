@@ -1,6 +1,6 @@
 from configparser import ConfigParser
 
-def load_config(filename='/home/ben/DynaBase/database.ini', section='postgresql'):
+def load_config(filename='/mnt/c/Users/glisc/projects/Dynabase/database.ini', section='postgresql_local'):
     parser = ConfigParser()
     parser.read(filename)
 

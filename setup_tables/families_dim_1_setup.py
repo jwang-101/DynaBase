@@ -44,7 +44,6 @@ CREATE TABLE families_dim_1_NF (
     base_field_degree integer,
     sigma_one varchar,
     sigma_two varchar,
-    sigma_three varchar,
     ordinal integer,
     citations integer[],
     is_polynomial boolean,

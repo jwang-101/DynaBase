@@ -154,7 +154,7 @@ def check_conjugates_FF(F,G, normalize_base=False, field_type=None, num_paramete
             return 1
     return 2
 
-def conj_in_database_FF(F, sigma_1=None, conj_fns=None, max_sigma=3, compare_model='original', log_file=sys.stdout, timeout=30):
+def conj_in_database_FF(F, sigma_1=None, conj_fns=None, max_sigma=2, compare_model='original', log_file=sys.stdout, timeout=30):
     """
     Determine if F is conjugate to a model already in the database.
     This includes the identity conjugation.
@@ -430,19 +430,8 @@ def add_sigma_inv_FF(label, model_name='original', start=2, end=3, log_file=sys.
                     raise ValueError("function not found to update")
                 else:
                     log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for sigma.' + str(k) + '\n')
-            elif k == 3:
-                sigma.update({'three':[str(t) for t in F.sigma_invariants(k)]})
-                my_cursor.execute("""UPDATE functions_dim_1_NF
-                    SET sigma_invariants.three = %(three)s
-                    WHERE label=%(label)s
-                    """,sigma)
-                if my_cursor.rowcount == 0:
-                    log_file.write('function ' + label + 'not found \n')
-                    raise ValueError("function not found to update")
-                else:
-                    log_file.write('updated ' + str(my_cursor.rowcount) + ' functions for sigma.' + str(k) + '\n')
             else:
-                raise NotImplementedError("only upto k=3")
+                raise NotImplementedError("only upto k=2")
 
         cancel_alarm()
         return True

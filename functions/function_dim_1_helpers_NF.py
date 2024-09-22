@@ -268,7 +268,6 @@ def conj_in_database_NF(F, my_cursor, conj_fns=None, log_file=sys.stdout, timeou
     if len(conj_fns) == 0:
         #nothing with the same sigma_1,sigma_2
         return 0, []
-    # TODO should we go to sigma_3??
 
     try:
         if timeout != 0:
@@ -363,12 +362,9 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
     sigma_1 = str(hashlib.shake_256(''.join(s1).encode('utf-8')).hexdigest(digest_length))
     s2 = [str(t) for t in F.sigma_invariants(2)]
     sigma_2 = str(hashlib.shake_256(''.join(s2).encode('utf-8')).hexdigest(digest_length))
-    s3 = [str(t) for t in F.sigma_invariants(3)]
-    sigma_3 = str(hashlib.shake_256(''.join(s3).encode('utf-8')).hexdigest(digest_length))
 
     f['sigma_one'] = sigma_1
     f['sigma_two'] = sigma_2
-    f['sigma_three'] = sigma_3
 
     #see if a conjugate is already in the database
     log_file.write('Searching for functions: ' + str(list(F)) + ': ')
@@ -376,7 +372,7 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
         'sigma_two': f['sigma_two'], 'sigma_three': f['sigma_three']}
     my_cursor.execute("""SELECT * FROM functions_dim_1_NF
         WHERE degree=%(degree)s AND sigma_one=%(sigma_one)s
-        AND sigma_two=%(sigma_two)s AND sigma_three=%(sigma_three)s""",query)
+        AND sigma_two=%(sigma_two)s""",query)
     conj_fns = my_cursor.fetchall()
     m = len(conj_fns)
     found, L = conj_in_database_NF(F, my_cursor, conj_fns=conj_fns, log_file=log_file, timeout=timeout)
@@ -414,14 +410,14 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
 
     my_cursor.execute("""INSERT INTO functions_dim_1_NF
         (degree, base_field_label, base_field_degree,
-         sigma_one, sigma_two, sigma_three, ordinal,
+         sigma_one, sigma_two, ordinal,
          original_model.coeffs, original_model.resultant, original_model.bad_primes,
          original_model.height, original_model.base_field_label,
          original_model.conjugation_from_original,
          original_model.conjugation_from_original_base_field_label, display_model)
         VALUES
         (%(degree)s, %(base_field_label)s, %(base_field_degree)s,
-         %(sigma_one)s,%(sigma_two)s,%(sigma_three)s,%(ordinal)s,
+         %(sigma_one)s,%(sigma_two)s,%(ordinal)s,
          %(original_model.coeffs)s, %(original_model.resultant)s, %(original_model.bad_primes)s,
          %(original_model.height)s, %(original_model.base_field_label)s,
          %(original_model.conjugation_from_original)s,
@@ -1439,7 +1435,7 @@ def add_families_NF(function_id, my_cursor, log_file=sys.stdout):
     if my_cursor.rowcount == 0:
         return False
     f_sigmas = []
-    for k in range(1,4):
+    for k in range(1,3):
         f_sigmas.append(f.sigma_invariants(k))
 
     for fam in my_cursor.fetchall():
@@ -1450,7 +1446,7 @@ def add_families_NF(function_id, my_cursor, log_file=sys.stdout):
         # assume for now that the family is defined over QQ
         S = PolynomialRing(K, fam['num_parameters'], 't')
         SF = FractionField(S)
-        for k in [1, 2, 3]:
+        for k in [1, 2]:
             # compute the family sigmas and
             # move the function sigmas to the same ring
             fam_sigmas.append([SF(v) for v in F.sigma_invariants(k)])

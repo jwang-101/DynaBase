@@ -166,20 +166,18 @@ def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, name=
 
     sig_one = [str(t) for t in F.sigma_invariants(1)]
     sig_two = [str(t) for t in F.sigma_invariants(2)]
-    sig_three = [str(t) for t in F.sigma_invariants(3)]
+
     f['sigma_one']=str(hashlib.shake_256(''.join(sig_one).encode('utf-8')).hexdigest(digest_length))
     f['sigma_two']=str(hashlib.shake_256(''.join(sig_two).encode('utf-8')).hexdigest(digest_length))
-    f['sigma_three']=str(hashlib.shake_256(''.join(sig_three).encode('utf-8')).hexdigest(digest_length))
 
     #see if a conjugate is already in the database
     log_file.write('Searching for functions: ' + str(list(F)) + ': ')
     query = {'degree':f['degree'], 'sigma_one': f['sigma_one'],\
-            'sigma_two': f['sigma_two'], 'sigma_three': f['sigma_three']}
+            'sigma_two': f['sigma_two']}
     my_cursor.execute("""SELECT * FROM families_dim_1_NF
         WHERE degree=%(degree)s AND
             sigma_one=%(sigma_one)s AND
-            sigma_two=%(sigma_two)s AND
-            sigma_three=%(sigma_three)s
+            sigma_two=%(sigma_two)s
             """,query)
     if my_cursor.rowcount != 0:
         F_id = my_cursor.fetchone()['family_id']
@@ -196,10 +194,10 @@ def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, name=
 
     my_cursor.execute("""INSERT INTO families_dim_1_NF
         (name, degree, num_parameters, model_coeffs, model_resultant, base_field_label, base_field_degree,
-            sigma_one, sigma_two, sigma_three, ordinal)
+            sigma_one, sigma_two, ordinal)
         VALUES
         (%(name)s, %(degree)s, %(num_parameters)s, %(model_coeffs)s, %(model_resultant)s, %(base_field_label)s,
-         %(base_field_degree)s, %(sigma_one)s,%(sigma_two)s,%(sigma_three)s,%(ordinal)s)
+         %(base_field_degree)s, %(sigma_one)s,%(sigma_two)s,%(ordinal)s)
         RETURNING family_id """,f)
     F_id = my_cursor.fetchone()[0]
     log_file.write('inserted: ' + str(list(F)) + ' as ' + str(F_id) + '\n')

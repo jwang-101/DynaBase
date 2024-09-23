@@ -194,7 +194,7 @@ def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, name=
 
     my_cursor.execute("""INSERT INTO families_dim_1_NF
         (name, degree, num_parameters, model_coeffs, model_resultant, base_field_label, base_field_degree,
-            sigma_one, sigma_two, sigma_three, ordinal)
+            sigma_one, sigma_two, ordinal)
         VALUES
         (%(name)s, %(degree)s, %(num_parameters)s, %(model_coeffs)s, %(model_resultant)s, %(base_field_label)s,
          %(base_field_degree)s, %(sigma_one)s,%(sigma_two)s,%(ordinal)s)

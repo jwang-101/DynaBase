@@ -369,7 +369,7 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
     #see if a conjugate is already in the database
     log_file.write('Searching for functions: ' + str(list(F)) + ': ')
     query = {'degree':f['degree'], 'sigma_one': f['sigma_one'],\
-        'sigma_two': f['sigma_two'], 'sigma_three': f['sigma_three']}
+        'sigma_two': f['sigma_two']}
     my_cursor.execute("""SELECT * FROM functions_dim_1_NF
         WHERE degree=%(degree)s AND sigma_one=%(sigma_one)s
         AND sigma_two=%(sigma_two)s""",query)

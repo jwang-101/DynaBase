@@ -21,11 +21,6 @@ AUTHORS:
 
 # drop table if it already exists
 my_cursor.execute("""
-    DROP TABLE IF EXISTS number_fields
-""")
-
-# drop table if it already exists
-my_cursor.execute("""
     DROP TABLE IF EXISTS finite_fields
 """)
 
@@ -42,22 +37,6 @@ my_cursor.execute("""
 
 #do we need embeddings?             F['embeddings']
 # label = NF.label, FF.label, pF.label ?
-
-#coefficients(sparse=False) returns coefficients from
-#constant term to leading term
-
-my_cursor.execute("""
-CREATE TABLE number_fields (
-    label varchar(%s) PRIMARY KEY,
-    degree integer,
-    defn_poly_coeffs integer[],
-    signature integer[2],
-    conductor integer,
-    discriminant integer,
-    class_number integer
-  )
-""",[field_label_length])
-
 
 my_cursor.execute("""
 CREATE TABLE finite_fields (

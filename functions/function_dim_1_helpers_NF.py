@@ -66,7 +66,6 @@ from functions.function_dim_1_helpers_generic import array_to_graph
 #  Functionality for working with functions over number fields
 ##############################################################
 
-from fields.field_helpers_NF import add_field_NF
 from fields.field_helpers_NF import normalize_field_NF
 from fields.field_helpers_NF import lmfdb_field_label_NF
 from fields.field_helpers_NF import get_sage_field_NF

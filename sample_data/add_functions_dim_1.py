@@ -14,7 +14,7 @@ load("connect.py")
 
 #########################
 
-path_to_log = "/home/ben/dynabase/sample_data/functions_log.txt"
+path_to_log = "/mnt/c/Users/glisc/projects/DynaBase/functions_log.txt"
 log_file = open(path_to_log, 'w', 1)
 
 #x^2 + c

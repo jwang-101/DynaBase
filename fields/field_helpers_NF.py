@@ -87,7 +87,7 @@ def check_field_normalized_NF(K, log_file=sys.stdout):
     raise ValueError('field not a number field')
 
 
-def lmfdb_field_label_NF(K): #label finding
+def lmfdb_field_label_NF(K, log_file = sys.stdout): #label finding
     #assumes the field is nomalized
     if not check_field_normalized_NF(K):
         raise ValueError('field not normalized')

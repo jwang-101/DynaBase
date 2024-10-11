@@ -17,6 +17,7 @@ AUTHORS:
 #                  https://www.gnu.org/licenses/
 # ****************************************************************************
 
+
 import sys
 from sage.categories.number_fields import NumberFields
 from sage.libs.pari import pari
@@ -26,7 +27,7 @@ from sage.rings.polynomial.polynomial_ring_constructor import PolynomialRing
 from sage.rings.rational_field import QQ
 
 
-def normalize_field_NF(K, emb=None, log_file=sys.stdout):
+def normalize_field_NF(K, emb=None, log_file=sys.stdout): #replace with lmfdb normalization
     """
     put the base field in normalized form.
     Return the normalized field and an embedding
@@ -84,17 +85,27 @@ def check_field_normalized_NF(K, log_file=sys.stdout):
     raise ValueError('field not a number field')
 
 
-def field_in_database_NF(K, my_cursor, log_file=sys.stdout):
-    if not check_field_normalized_NF(K, log_file=log_file):
-        raise ValueError("field not normalized")
-    D = {}
-    D['defn_poly_coeffs'] = [int(t) for t in K.defining_polynomial().coefficients(sparse=False)]
-    my_cursor.execute("""SELECT label FROM number_fields WHERE defn_poly_coeffs=%(defn_poly_coeffs)s""",D)
-    label = my_cursor.fetchone()
-    if label is None:
-        log_file.write('Field not Found: ' + str(K) + '\n')
-        return False, 0
-    return True, label[0]
+def lmfdb_field_label(K): #label finding
+    #assumes the field is nomalized
+    poly = K.defining_polynomial() 
+    z = poly.parent().gen(0)
+    C=poly.coefficients(sparse=False)
+    from six.moves.urllib.request import urlopen
+    import json
+    url = 'https://beta.lmfdb.org/api/nf_fields/?coeffs={'
+    for i in range(len(C)-1):
+        url += str(C[i]) + ','
+    url += str(C[-1]) + '}&_format=json&_fields=label&_delim=;'
+    page = urlopen(url)
+    dat = str(page.read().decode('utf-8'))
+    dat = json.loads(dat)['data']
+    if dat != []:
+        label = dat[0]['label']
+    else:
+        # can't find the field
+        label = 0
+    return label
+
 
 def add_field_NF(K, my_cursor, normalize=True, log_file=sys.stdout):
     """
@@ -121,7 +132,7 @@ def add_field_NF(K, my_cursor, normalize=True, log_file=sys.stdout):
             raise ValueError('field not normalized')
         else:
             K, phi = normalize_field_NF(K, log_file=log_file)
-    bool, K_label = field_in_database_NF(K, my_cursor, log_file=log_file)
+    bool, K_label = lmfdb_field_label(K, my_cursor, log_file=log_file)
     if bool:
         log_file.write('already in db: ' + str(K) + '\n')
         #already in database
@@ -194,7 +205,7 @@ def add_field_NF(K, my_cursor, normalize=True, log_file=sys.stdout):
 
 
 def delete_field_NF(K, my_cursor):
-    bool, K_label = field_in_database_NF(K)
+    bool, K_label = lmfdb_field_label(K)
     if not bool:
         raise ValueError("field not in database")
     my_cursor.execute("""DELETE FROM number_fields WHERE label = %s""",K_label)
@@ -205,18 +216,22 @@ def delete_field_NF(K, my_cursor):
         raise ValueError("Deleted more than 1 row") #should never occur
     return val
 
-def get_sage_field_NF(field_label, my_cursor):
-    """
-    given a field label, get the field from the database and return the
-    field as sage object
-    """
-    D={'field_label':field_label}
-    my_cursor.execute("""SELECT * FROM number_fields WHERE label=%(field_label)s""",D)
-    F = my_cursor.fetchone()
-    R = PolynomialRing(QQ,'X')
-    def_poly = R(F['defn_poly_coeffs'])
-    if def_poly == R.gen():
-        base_field = QQ
-    else:
-        base_field = NumberField(def_poly, 'a')
-    return base_field
+
+def lmfdb_label_to_sage(label): # get field from db, return as sage object
+    from six.moves.urllib.request import urlopen
+    import json
+    url = 'https://beta.lmfdb.org/api/nf_fields/?label=' + label + '&_format=json&_fields=coeffs&_delim=;'
+    page = urlopen(url)
+    dat = str(page.read().decode('utf-8'))
+    dat = json.loads(dat)['data']
+    if dat == []:
+        return 0
+    C = dat[0]['coeffs']
+    if C == [0,1]:
+        return QQ
+    R.<z>=PolynomialRing(QQ)
+    poly = 0
+    for i in range(len(C)):
+        poly += z**i*C[i]
+    K.<a>=NumberField(poly)
+    return K

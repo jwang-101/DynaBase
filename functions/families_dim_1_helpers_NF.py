@@ -154,7 +154,7 @@ def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, name=
     K_id = K_id
     if not bool:
         if bool_add_field:
-            K_id = add_field_NF(base_field, log_file=log_file)
+            K_id = normalize_family_NF(base_field, log_file=log_file)
         else:
             log_file.write('Could not add : ' + str(list(F)) + ' because ' + str(base_field) + ' not in database \n')
             raise ValueError("base_field not in database")

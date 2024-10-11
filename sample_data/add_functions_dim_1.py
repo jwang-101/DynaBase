@@ -20,7 +20,7 @@ log_file = open(path_to_log, 'w', 1)
 #x^2 + c
 P=ProjectiveSpace(QQ,1,'x,y')
 x,y = P.gens()
-for c in QQ.range_by_height(8):
+for c in QQ.range_by_height(8): #test bigger numbers here; crash error or timeout error
     F=DynamicalSystem([x**2+c*y**2,y**2]) #polys
     if not model_in_database_NF(F, my_cursor)[0]:
         label = add_function_all_NF(F, my_cursor, citations=['Poonen1998'], log_file=log_file)

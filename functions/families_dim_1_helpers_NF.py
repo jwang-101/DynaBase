@@ -91,6 +91,7 @@ def normalize_family_NF(F, log_file=sys.stdout):
     else: #other field
         raise NotImplementedError('Can only normalize number fields with this function')
 
+
 def get_sage_family_NF(id, my_cursor, log_file=sys.stdout):
     """
     Given a label and a model name, return the sage dynamical system.
@@ -102,7 +103,7 @@ def get_sage_family_NF(id, my_cursor, log_file=sys.stdout):
         WHERE family_id=%(family_id)s
         """, query)
     G = my_cursor.fetchone()
-    K = get_sage_field_NF(G['base_field_label'], my_cursor)
+    K = get_sage_field_NF(G['base_field_label'])
 
     n = G['num_parameters']
     S = PolynomialRing(K,'t',n)
@@ -121,7 +122,8 @@ def get_sage_family_NF(id, my_cursor, log_file=sys.stdout):
     return DynamicalSystem(polys, domain=P)
 
 
-def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, name=None, bool_add_field=False, log_file=sys.stdout, timeout=30):
+def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, name=None, log_file=sys.stdout, timeout=30):
+    #look for lmfdb, cant find it, give error
     """
     Give a family of sage functions F, determine it's label and add it to the database.
 
@@ -150,14 +152,10 @@ def add_family_NF(F, my_cursor, is_poly=None, num_crit=None, num_aut=None, name=
 
     f['name'] = name
 
-    bool, K_id = field_in_database_NF(base_field, my_cursor)
-    K_id = K_id
+    bool, K_id = lmfdb_field_label_NF(base_field)
     if not bool:
-        if bool_add_field:
-            K_id = normalize_family_NF(base_field, log_file=log_file)
-        else:
-            log_file.write('Could not add : ' + str(list(F)) + ' because ' + str(base_field) + ' not in database \n')
-            raise ValueError("base_field not in database")
+        log_file.write('Could not add : ' + str(list(F)) + ' because ' + str(base_field) + ' not in database \n')
+        raise ValueError("base_field not in database")
     F.normalize_coordinates()
 
     f['base_field_label'] = K_id

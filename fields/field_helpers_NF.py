@@ -25,9 +25,11 @@ from sage.rings.cc import CC
 from sage.rings.number_field.number_field import NumberField
 from sage.rings.polynomial.polynomial_ring_constructor import PolynomialRing
 from sage.rings.rational_field import QQ
+from six.moves.urllib.request import urlopen
+import json
 
 
-def normalize_field_NF(K, emb=None, log_file=sys.stdout): #replace with lmfdb normalization
+def normalize_field_NF(K, emb=None, log_file=sys.stdout): 
     """
     put the base field in normalized form.
     Return the normalized field and an embedding
@@ -85,13 +87,13 @@ def check_field_normalized_NF(K, log_file=sys.stdout):
     raise ValueError('field not a number field')
 
 
-def lmfdb_field_label(K): #label finding
+def lmfdb_field_label_NF(K): #label finding
     #assumes the field is nomalized
+    if not check_field_normalized_NF(K):
+        raise ValueError('field not normalized')
     poly = K.defining_polynomial() 
     z = poly.parent().gen(0)
     C=poly.coefficients(sparse=False)
-    from six.moves.urllib.request import urlopen
-    import json
     url = 'https://beta.lmfdb.org/api/nf_fields/?coeffs={'
     for i in range(len(C)-1):
         url += str(C[i]) + ','
@@ -101,125 +103,15 @@ def lmfdb_field_label(K): #label finding
     dat = json.loads(dat)['data']
     if dat != []:
         label = dat[0]['label']
+        return True, label
     else:
         # can't find the field
         label = 0
-    return label
+        return False, label
 
 
-def add_field_NF(K, my_cursor, normalize=True, log_file=sys.stdout):
-    """
-    Add the field K to the number_fields table.
+def get_sage_field_NF(label): # get field from db, return as sage object
 
-    label varchar(%s) PRIMARY KEY,
-    degree integer,
-    defn_poly_coeffs integer[],
-    signature point,
-    conductor integer,
-    discriminant integer,
-    class_number integer
-
-    K absolute number field  deg.r.disc.num
-
-    ##todo: deal with repeat 'x.x.x.' for higher degree number fields,
-    so should search by normalized defining polynomial and then increment
-
-    todo::this needs timeout
-    """
-    log_file.write('Adding field: ' + str(K) + ':')
-    if not check_field_normalized_NF(K, log_file=log_file):
-        if not normalize:
-            raise ValueError('field not normalized')
-        else:
-            K, phi = normalize_field_NF(K, log_file=log_file)
-    bool, K_label = lmfdb_field_label(K, my_cursor, log_file=log_file)
-    if bool:
-        log_file.write('already in db: ' + str(K) + '\n')
-        #already in database
-        return -1
-    field_query = {}
-    if K in NumberFields():
-        if K == QQ:
-            label = '1.1.1.'
-        else:
-            label = str(K.degree()) + '.' + str(K.signature()[0]) + '.' + str(K.discriminant().abs()) + '.'
-    else:
-        raise NotImplementedError("only number fields")
-
-    #take into account distinct fields with the same initial label values
-    # TODO: these end up not matching LMFDB labels
-    field_query['label'] = label + '%'
-    my_cursor.execute("""SELECT label FROM number_fields WHERE label LIKE %(label)s""",field_query)
-    g = my_cursor.fetchall()
-
-    #debugging sanity check
-    for L in g:
-        print(L)
-    label = label + str(len(g)+1)
-    log_file.write('label computed: ' + label + '\n')
-
-    F = {}
-    F['label'] = label
-    F['degree'] = int(K.degree())
-    F['defn_poly_coeffs'] = [int(t) for t in K.defining_polynomial().coefficients(sparse=False)]
-    if K == QQ:
-        F['signature'] = ([int(1),int(0)])
-        F['conductor'] = int(1)
-        F['discriminant'] = int(1)
-        F['class_number'] = int(1)
-        #F['embeddings'] = {'min_diff' : float(1.0),\
-        #                   '0' : {'val_real' : float(0.0), 'val_imag' : float(0.0)}}
-    else:
-        F['signature'] = [int(t) for t in K.signature()]
-        F['discriminant'] = int(K.discriminant())
-        if K.is_abelian():
-            F['conductor'] = int(K.conductor())
-        F['class_number'] = int(K.class_number())
-        #embedddings into CC sorted by value
-        #embs = K.embeddings(CC)
-        #half the min distance between roots
-        #min_diff = min([(embs[i](K.gen())-embs[j](K.gen())).abs()\
-        #                for i in range(len(embs)-1) for j in range(i+1,len(embs))])/2
-        #keep track of embeddings by image of generator
-        #i = 0
-        #F['embeddings'] = {'min_diff':float(min_diff)}
-        #for phi in K.embeddings(CC):
-        #    F['embeddings'].update({str(i) : {'val_real':float(phi(K.gen()).real()),\
-        #                                 'val_imag':float(phi(K.gen()).imag())}})
-        #    i += 1
-
-    # add to number fields
-    if K==QQ or K.is_abelian():
-        my_cursor.execute("""INSERT INTO number_fields VALUES
-            (%(label)s, %(degree)s, %(defn_poly_coeffs)s,
-             %(signature)s, %(conductor)s,%(class_number)s,%(discriminant)s)
-            RETURNING label """,F)
-    else:
-        my_cursor.execute("""INSERT INTO number_fields VALUES
-            (%(label)s, %(degree)s, %(defn_poly_coeffs)s,
-             %(signature)s, %(class_number)s,%(discriminant)s)
-            RETURNING label """,F)
-    K_id = my_cursor.fetchone()[0]
-    log_file.write('field inserted as: ' + str(K_id) + '\n')
-    return K_id
-
-
-def delete_field_NF(K, my_cursor):
-    bool, K_label = lmfdb_field_label(K)
-    if not bool:
-        raise ValueError("field not in database")
-    my_cursor.execute("""DELETE FROM number_fields WHERE label = %s""",K_label)
-    val = my_cursor.rowcount
-    if val==0:
-        raise ValueError("Failed to find field" + str(K))
-    elif val>1:
-        raise ValueError("Deleted more than 1 row") #should never occur
-    return val
-
-
-def lmfdb_label_to_sage(label): # get field from db, return as sage object
-    from six.moves.urllib.request import urlopen
-    import json
     url = 'https://beta.lmfdb.org/api/nf_fields/?label=' + label + '&_format=json&_fields=coeffs&_delim=;'
     page = urlopen(url)
     dat = str(page.read().decode('utf-8'))
@@ -229,9 +121,10 @@ def lmfdb_label_to_sage(label): # get field from db, return as sage object
     C = dat[0]['coeffs']
     if C == [0,1]:
         return QQ
-    R.<z>=PolynomialRing(QQ)
+    R=PolynomialRing(QQ, 'z')
+    z = R.gen(0)
     poly = 0
     for i in range(len(C)):
         poly += z**i*C[i]
-    K.<a>=NumberField(poly)
+    K=NumberField(poly, 'a')
     return K

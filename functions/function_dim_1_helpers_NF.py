@@ -27,7 +27,7 @@ from sage.matrix.constructor import matrix
 from sage.matrix.matrix_space import MatrixSpace
 from sage.misc.verbose import set_verbose
 from sage.rings.fraction_field import FractionField
-from sage.rings.fraction_field import is_FractionField
+from sage.rings.fraction_field import FractionField_generic
 from sage.rings.integer_ring import ZZ
 from sage.rings.polynomial.multi_polynomial_ring_base import MPolynomialRing_base
 from sage.rings.polynomial.polynomial_ring import PolynomialRing_general
@@ -79,7 +79,7 @@ def normalize_function_NF(F, log_file=sys.stdout):
 
     """
     base_field = F.base_ring()
-    if is_FractionField(base_field) or base_field in FunctionFields():
+    if isinstance(base_field, FractionField_generic) or base_field in FunctionFields():
         lcm_den = lcm([t.denominator() for g in F for t in g.coefficients()])
         F.scale_by(lcm_den)
         base_field = base_field.ring()
@@ -329,7 +329,7 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
 
     base_field = F.base_ring()
     #if isinstance(base_field, (PolynomialRing_general, MPolynomialRing_base))\
-    #  or base_field in FunctionFields() or is_FractionField(base_field):
+    #  or base_field in FunctionFields() or isinstance(base_field, FractionField_generic):
     #    f['num_parameters'] = int(base_field.ngens())
     #    F, phi = normalize_function(F, log_file=log_file)
     #    base_field = F.base_ring().base_ring()
@@ -425,7 +425,7 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
     if found == 2:
         #There is one or more twists in database
         f['twists'] = L
-        log_file.write('twist list: ' + str(L) + ' for ' + str(f['function_id']) + '\n')
+        log_file.write('twist list: ' + str(L) + ' for ' + str(F_id) + '\n')
         my_cursor.execute("""UPDATE functions_dim_1_NF
                     SET rational_twists = %(twists)s
                     WHERE function_id=%(function_id)s
@@ -578,7 +578,7 @@ def add_automorphism_group_NF(function_id, my_cursor, model_name='original', log
         log_file.write('aut group computed for:' + str(function_id) + '\n')
         return True
     except AlarmInterrupt:
-        log_file.write('timeout: aut group for:' + str(timeout) + ':' + str(f['function_id']) + '\n')
+        log_file.write('timeout: aut group for:' + str(timeout) + ':' + str(function_id) + '\n')
     except:
         log_file.write('failure: aut group for:' + str(function_id) + '\n')
         raise
@@ -602,6 +602,7 @@ def identify_graph(G, f, my_cursor, type, log_file=sys.stdout):
     periodic = set()
     for T in G.all_simple_cycles():
         periodic=periodic.union(set(T))
+    graph_data['periodic_cardinality'] = len(periodic)
     periodic_cycles = []
     for T in G.connected_components():
         num_periodic=0
@@ -649,11 +650,13 @@ def identify_graph(G, f, my_cursor, type, log_file=sys.stdout):
     graph_data['type'] = type
     my_cursor.execute("""INSERT INTO graphs_dim_1_NF
         (cardinality, edges, num_components, periodic_cycles,
-         preperiodic_components, positive_in_degree, max_tail, type)
+         periodic_cardinality, preperiodic_components, positive_in_degree,
+         max_tail, type)
         VALUES
         (%(cardinality)s, %(edges)s, %(num_components)s, %(periodic_cycles)s,
-         %(preperiodic_components)s, %(positive_in_degree)s, %(max_tail)s, %(type)s)
-        RETURNING graph_id """,graph_data)
+        %(periodic_cardinality)s, %(preperiodic_components)s, %(positive_in_degree)s,
+        %(max_tail)s, %(type)s)
+        RETURNING graph_id """, graph_data)
     log_file.write('adding preperiodic graph to table: ' + str(graph_data['edges']) + '\n')
     return my_cursor.fetchone()[0]
 

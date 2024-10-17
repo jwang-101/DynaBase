@@ -188,6 +188,7 @@ CREATE TABLE graphs_dim_1_NF (
     edges integer[],
     num_components integer,
     periodic_cycles integer[],
+    periodic_cardinality integer,
     preperiodic_components integer[],
     positive_in_degree integer,
     max_tail integer,

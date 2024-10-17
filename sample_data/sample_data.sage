@@ -1,6 +1,6 @@
-load_attach_path('/mnt/c/Users/glisc/projects/DynaBase')
+load_attach_path('/home/ben/dynabase')
 import sys
-sys.path.append("/mnt/c/Users/glisc/projects/DynaBase")
+sys.path.append("/home/ben/dynabase")
 
 # set up tables
 load("connect.py")

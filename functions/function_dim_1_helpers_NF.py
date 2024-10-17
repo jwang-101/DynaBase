@@ -66,9 +66,8 @@ from functions.function_dim_1_helpers_generic import array_to_graph
 #  Functionality for working with functions over number fields
 ##############################################################
 
-from fields.field_helpers_NF import add_field_NF
 from fields.field_helpers_NF import normalize_field_NF
-from fields.field_helpers_NF import field_in_database_NF
+from fields.field_helpers_NF import lmfdb_field_label_NF
 from fields.field_helpers_NF import get_sage_field_NF
 
 from functions.families_dim_1_helpers_NF import get_sage_family_NF
@@ -131,7 +130,7 @@ def model_in_database_NF(F, my_cursor, sigma_1=None, conj_fns=None, log_file=sys
     model_names = ['original_model', 'monic_centered', 'chebyshev_model', 'reduced_model', 'newton_model']
     #field_label, emb_index, field_id = get_field_label(F.base_ring(), log_file=log_file)
     F_coeffs = [get_coefficients(g) for g in F]
-    bool, K_id = field_in_database_NF(F.base_ring(), my_cursor, log_file=log_file)
+    bool, K_id = lmfdb_field_label_NF(F.base_ring(), log_file=log_file)
     if not bool:
         return 0, '0'
     for g in conj_fns:
@@ -170,7 +169,7 @@ def get_sage_func_NF(function_id, model_name, my_cursor, log_file=sys.stdout):
             """, query)
     G = my_cursor.fetchone()
 
-    K = get_sage_field_NF(G['base_field_label'], my_cursor)
+    K = get_sage_field_NF(G['base_field_label'])
     P = ProjectiveSpace(K,1,'x,y')
     R = P.coordinate_ring()
     x,y = R.gens()
@@ -343,14 +342,10 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
     print(normalize_function_NF(F))
     F, phi = normalize_function_NF(F, log_file=log_file)
 
-    bool, K_id = field_in_database_NF(base_field, my_cursor)
-    K_id = K_id
+    bool, K_id = lmfdb_field_label_NF(base_field)
     if not bool:
-        if bool_add_field:
-            K_id = add_field_NF(base_field, my_cursor, log_file=log_file)
-        else:
-            log_file.write('Could not add : ' + str(list(F)) + ' because ' + str(base_field) + ' not in database \n')
-            raise ValueError("base_field not in database")
+        log_file.write('Could not add : ' + str(list(F)) + ' because ' + str(base_field) + ' not in database \n')
+        raise ValueError("base_field not in database")
     F.normalize_coordinates()
 
     f['base_field_label'] = K_id
@@ -471,13 +466,10 @@ def add_is_pcf(my_cursor, function_id=None, model_name='original', bool_add_fiel
         pcf['is_pcf']=is_pcf
         K, phi = F.field_of_definition_critical(return_embedding=True)
         L, psi = normalize_field_NF(K, log_file=log_file)
-        bool, L_id = field_in_database_NF(L, my_cursor)
+        bool, L_id = lmfdb_field_label_NF(L)
         if not bool:
-            if bool_add_field:
-                L_id = add_field_NF(L, my_cursor, log_file=log_file)
-            else:
-                log_file.write('Could not add crtical point information for : ' + str(list(F)) + ' because ' + str(L) + ' not in database \n')
-                raise ValueError("base_field not in database")
+            log_file.write('Could not add crtical point information for : ' + str(list(F)) + ' because ' + str(L) + ' not in database \n')
+            raise ValueError("base_field not in database")
         F_cp = F.change_ring(psi*phi)
         cp = F_cp.critical_points()
         pcf['cp_cardinality'] = len(cp)
@@ -695,10 +687,11 @@ def add_rational_preperiodic_points_NF(function_id, my_cursor, model_name='origi
         F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
         if field_label is None:
             K = F.base_ring()
-            bool, field_label = field_in_database_NF(K, my_cursor, log_file=log_file)
-            #TODO deal with case K is not in database
+            bool, field_label = lmfdb_field_label_NF(K, log_file=log_file)
+            if not bool:
+                return False
         else:
-            K = get_sage_field_NF(field_label, my_cursor)
+            K = get_sage_field_NF(field_label)
             # TODO: this may have embedding issues in some cases
             FK.change_ring(K)
         if timeout != 0:
@@ -793,7 +786,7 @@ def add_reduced_model_NF(function_id, my_cursor, model_name='original', log_file
 
         g.normalize_coordinates()
         #original model
-        bool, K_id = field_in_database_NF(F.base_ring(), my_cursor)
+        bool, K_id = lmfdb_field_label_NF(F.base_ring())
         assert(bool)
         query['reduced_model.coeffs'] = [get_coefficients(g) for g in F]
         query['reduced_model.resultant'] = str(F.resultant())
@@ -916,7 +909,7 @@ def add_monic_centered_model_NF(function_id, my_cursor, model_name='original', l
         G.scale_by(1/G[0].coefficient({G.domain().gen(0):G.degree()}))
 
         #monic centered model
-        bool, L_id = field_in_database_NF(L, my_cursor)
+        bool, L_id = lmfdb_field_label_NF(L)
         assert(bool)
         query['monic_centered.coeffs'] = [get_coefficients(g) for g in G]
         query['monic_centered.resultant'] = str(G.resultant())
@@ -1066,7 +1059,7 @@ def add_chebyshev_model_NF(function_id, my_cursor, model_name='original', log_fi
         ch = F.domain().chebyshev_polynomial(d)
         conj_set = Fbar.conjugating_set(ch.change_ring(QQbar))
         K = ch.base_ring()
-        bool, K_id = field_in_database_NF(K, my_cursor)
+        bool, K_id = lmfdb_field_label_NF(K)
         assert(bool)
 
         query['is_chebyshev'] = True
@@ -1088,7 +1081,7 @@ def add_chebyshev_model_NF(function_id, my_cursor, model_name='original', log_fi
         K, el, psi = number_field_elements_from_algebraics([t for r in M for t in r])
         L, phi = normalize_field_NF(K, log_file=log_file)
         M = matrix(L, N+1, N+1, [phi(t) for t in el])
-        bool, L_id = field_in_database_NF(L, my_cursor)
+        bool, L_id = lmfdb_field_label_NF(L)
         assert(bool)
         query['chebyshev_model.conjugation_from_original'] = [str(t) for r in M for t in r]
         query['chebyshev_model.conjugation_from_original_base_field_label'] = L_id
@@ -1194,7 +1187,7 @@ def add_newton_model_NF(function_id, my_cursor, model_name='original', log_file=
             newton = F
             L = F.base_ring()
             M = matrix(QQ,2,2,[1,0,0,1])
-        bool, L_id = field_in_database_NF(L, my_cursor)
+        bool, L_id = lmfdb_field_label_NF(L)
         assert(bool)
 
         N_aff = newton.dehomogenize(1)
@@ -1426,7 +1419,7 @@ def add_families_NF(function_id, my_cursor, log_file=sys.stdout):
     func_vals = my_cursor.fetchone()
     f = get_sage_func_NF(function_id, 'original', my_cursor)
     d = func_vals['degree']
-    K = get_sage_field_NF(func_vals['base_field_label'], my_cursor)
+    K = get_sage_field_NF(func_vals['base_field_label'])
     families = func_vals['family']
     if families is None:
         families = []

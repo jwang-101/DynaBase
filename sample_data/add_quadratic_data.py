@@ -34,6 +34,7 @@ def parallel_function(F):
         result =  add_function_all_NF(F, my_cursor, citations=['Poonen1998'], log_file=log_file)
     else:
         result = 0
+
     my_session.commit()
     my_session.close()
     return result
@@ -43,7 +44,7 @@ parallel_data = []
 P = ProjectiveSpace(QQ, 1, 'x,y')
 x, y = P.gens()
 
-for c in QQ.range_by_height(9): #test bigger numbers here; crash error or timeout error #check if parallelism works without crashing
+for c in QQ.range_by_height(12): #test bigger numbers here; crash error or timeout error #check if parallelism works without crashing
     F=DynamicalSystem([x**2+c*y**2,y**2]) #polys
     parallel_data.append(((F,), {}))
 

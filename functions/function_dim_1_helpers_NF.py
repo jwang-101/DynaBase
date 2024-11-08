@@ -292,7 +292,7 @@ def conj_in_database_NF(F, my_cursor, conj_fns=None, log_file=sys.stdout, timeou
         return 0, []
 
     except AlarmInterrupt:
-        log_file.write('timeout: func_in_db: ' + str(timeout) + ':' + polys['val'] + '\n')
+        log_file.write('timeout: func_in_db: ' + str(timeout) + ':' + str(list(F)) + '\n')
         raise
 
 
@@ -377,7 +377,7 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
         #print(L)
         #print('function already known for : ' + str(L[0]) + '\n')
         log_file.write('function already known for : ' + str(L[0]) + '\n')
-        return L[0]
+        return False, L[0]
     # otherwise we'll add the function
     # assume none are conjugate if we get to here
     f['ordinal'] = m+1
@@ -443,7 +443,7 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
                     WHERE function_id=%s
                     """,[twist_list, twist_id])
             log_file.write('updating twist list for: ' + str(twist_id) + '\n')
-    return F_id
+    return True, F_id
 
 
 def add_is_pcf(my_cursor, function_id=None, model_name='original', bool_add_field=False, log_file=sys.stdout, timeout=30):
@@ -458,7 +458,7 @@ def add_is_pcf(my_cursor, function_id=None, model_name='original', bool_add_fiel
     try:
         log_file.write('computing is_pcf for : ' + str(function_id) + '\n')
         F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
-        pcf={'function_id':function_id}
+        pcf = {'function_id':function_id}
         try:
             is_pcf = F.is_postcritically_finite()
         except ValueError:
@@ -491,8 +491,8 @@ def add_is_pcf(my_cursor, function_id=None, model_name='original', bool_add_fiel
         return True
     except AlarmInterrupt:
         log_file.write('timeout: is_pcf for:' + str(timeout) + ':' + str(function_id) + '\n')
-    except:
-        log_file.write('failure: is_pcf for:' + str(function_id) + '\n')
+    except Exception as e:
+        log_file.write('failure: is_pcf for:' + str(function_id) + 'with error:' + str(e) + '\n')
         raise
 
     cancel_alarm()
@@ -579,8 +579,8 @@ def add_automorphism_group_NF(function_id, my_cursor, model_name='original', log
         return True
     except AlarmInterrupt:
         log_file.write('timeout: aut group for:' + str(timeout) + ':' + str(function_id) + '\n')
-    except:
-        log_file.write('failure: aut group for:' + str(function_id) + '\n')
+    except Exception as e:
+        log_file.write('failure: aut group for:' + str(function_id) + 'with error:' + str(e) + '\n')
         raise
     cancel_alarm()
     return False
@@ -696,7 +696,7 @@ def add_rational_preperiodic_points_NF(function_id, my_cursor, model_name='origi
         else:
             K = get_sage_field_NF(field_label)
             # TODO: this may have embedding issues in some cases
-            FK.change_ring(K)
+            F = F.change_ring(K)
         if timeout != 0:
             alarm(timeout)
         if K.degree() > 4:
@@ -742,8 +742,8 @@ def add_rational_preperiodic_points_NF(function_id, my_cursor, model_name='origi
         return True
     except AlarmInterrupt:
         log_file.write('timeout: preperiodic points for:' + str(timeout) + ':' + str(function_id) + '\n')
-    except:
-        log_file.write('failure: preperiodic points for:' + str(function_id) + '\n')
+    except Exception as e:
+        log_file.write('failure: preperiodic points for:' + str(function_id) + 'with error:' + str(e) + '\n')
         raise
 
     cancel_alarm()
@@ -771,11 +771,14 @@ def add_reduced_model_NF(function_id, my_cursor, model_name='original', log_file
     try:
         F = get_sage_func_NF(function_id, model_name, my_cursor, log_file=log_file)
         try:
-            log_file.write('trying reduced with dynatomic \n')
+            log_file.write('trying reduced with dynatomic for:' + str(function_id) + '\n')
             g, M = F.reduced_form(smallest_coeffs=True, dynatomic=True,\
                                   return_conjugation=True, start_n=1)
-        except:
-            log_file.write('trying reduced with periodic \n')
+        except Exception as e:
+            log_file.write('error reduced with dynatomic for:' + str(function_id) + 'with error:' + str(e) + '\n')
+            if timeout != 0:
+                alarm(timeout)
+            log_file.write('trying reduced with periodic for:' + str(function_id) + '\n')
             g, M = F.reduced_form(smallest_coeffs=True, dynatomic=False,\
                                    return_conjugation=True, start_n=1)
         if M.base_ring() == ZZ:
@@ -822,8 +825,8 @@ def add_reduced_model_NF(function_id, my_cursor, model_name='original', log_file
 
     except AlarmInterrupt:
         log_file.write('reduced model timeout: ' + str(timeout) + ':' + str(function_id) + '\n')
-    except:
-        log_file.write('reduced model failure: ' + str(function_id) + '\n')
+    except Exception as e:
+        log_file.write('reduced model failure: ' + str(function_id) + 'with error:' + str(e) + '\n')
         raise
     cancel_alarm()
     return False
@@ -856,8 +859,8 @@ def add_is_polynomial_NF(function_id, my_cursor, model_name='original', log_file
 
     except AlarmInterrupt:
         log_file.write('is_polynomial timeout: ' + str(timeout) + ':' + str(function_id) + '\n')
-    except:
-        log_file.write('is_polynomial failure: ' + str(function_id) + '\n')
+    except Exception as e:
+        log_file.write('is_polynomial failure: ' + str(function_id) + 'with error:' + str(e) + '\n')
         raise
     cancel_alarm()
     return False
@@ -949,8 +952,8 @@ def add_monic_centered_model_NF(function_id, my_cursor, model_name='original', l
 
     except AlarmInterrupt:
         log_file.write('monic centered model timeout: ' + str(timeout) + ':' + str(function_id) + '\n')
-    except:
-        log_file.write('monic centered model failure: ' + str(function_id) + '\n')
+    except Exception as e:
+        log_file.write('monic centered model failure: ' + str(function_id) + 'with error:' + str(e) + '\n')
         raise
     cancel_alarm()
     return False
@@ -997,11 +1000,11 @@ def add_chebyshev_model_NF(function_id, my_cursor, model_name='original', log_fi
         return True
     #check if chebyshev - Milnor
     my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
-    is_pcf= my_cursor.fetchone()['is_pcf']
+    is_pcf = my_cursor.fetchone()['is_pcf']
     if is_pcf is None:
         add_is_pcf(my_cursor, function_id, model_name=model_name, bool_add_field=True, log_file=log_file, timeout=timeout)
         my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
-        is_pcf= my_cursor.fetchone()['is_pcf']
+        is_pcf = my_cursor.fetchone()['is_pcf']
     if not is_pcf:
         cancel_alarm()
         #not chebyshev if not pcf
@@ -1112,8 +1115,8 @@ def add_chebyshev_model_NF(function_id, my_cursor, model_name='original', log_fi
 
     except AlarmInterrupt:
         log_file.write('chebyshev model timeout: ' + str(timeout) + ':' + str(function_id) + '\n')
-    except:
-        log_file.write('chebyshev model failure: ' + str(function_id) + '\n')
+    except Exception as e:
+        log_file.write('chebyshev model failure: ' + str(function_id) + 'with error:' + str(e) + '\n')
         raise
     cancel_alarm()
     return False
@@ -1241,8 +1244,8 @@ def add_newton_model_NF(function_id, my_cursor, model_name='original', log_file=
 
     except AlarmInterrupt:
         log_file.write('newton model timeout: ' + str(timeout) + ':' + str(function_id) + '\n')
-    except:
-        log_file.write('newton model failure: ' + str(function_id) + '\n')
+    except Exception as e:
+        log_file.write('newton model failure: ' + str(function_id) + 'with error:' + str(e) + '\n')
         raise
     cancel_alarm()
     return False
@@ -1259,11 +1262,11 @@ def add_is_lattes_NF(function_id, my_cursor, model_name='original', log_file=sys
     query['function_id']=function_id
     # must be pcf
     my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
-    is_pcf= my_cursor.fetchone()['is_pcf']
+    is_pcf = my_cursor.fetchone()['is_pcf']
     if is_pcf is None:
         add_is_pcf(my_cursor, function_id, model_name=model_name, bool_add_field=True, log_file=log_file, timeout=timeout)
         my_cursor.execute("""SELECT is_pcf FROM functions_dim_1_NF where function_id = %(function_id)s""",query)
-        is_pcf= my_cursor.fetchone()['is_pcf']
+        is_pcf = my_cursor.fetchone()['is_pcf']
     if not is_pcf:
         cancel_alarm()
         #not lattes if not pcf
@@ -1332,8 +1335,8 @@ def add_is_lattes_NF(function_id, my_cursor, model_name='original', log_file=sys
 
     except AlarmInterrupt:
         log_file.write('is lattes timeout: ' + str(timeout) + ':' + str(function_id) + '\n')
-    except:
-        log_file.write('is lattes failure: ' + str(function_id) + '\n')
+    except Exception as e:
+        log_file.write('is lattes failure: ' + str(function_id) + 'with error:' + str(e) + '\n')
         raise
     cancel_alarm()
     return False
@@ -1476,24 +1479,27 @@ def add_function_all_NF(F, my_cursor, citations=[], log_file=sys.stdout):
     """
     add all entries for one dynamical system
     """
-    F_id=add_function_NF(F, my_cursor, log_file=log_file)
-    add_citations_NF(F_id, citations, my_cursor, log_file=log_file)
-    add_is_pcf(my_cursor, F_id,'original', bool_add_field=True, log_file=log_file)
-    add_critical_portrait(F_id, my_cursor, 'original', log_file=log_file)
-    add_automorphism_group_NF(F_id, my_cursor, 'original', log_file=log_file)
-    add_rational_preperiodic_points_NF(F_id, my_cursor, log_file=log_file)
-    #TODO: need to fix these
-    if (F.base_ring().degree() == 1) and (F_id not in ['1.2.c8ddd2a7.1', '1.2.611af5d0.1', '1.2.7cb63904.1',\
-        '1.2.0d94343e.1','1.2.beb83dd2.1','1.2.dd6fd9ae.1','1.2.4994c36e.1',\
-        '1.2.98d76bdd.1', '1.3.423d4b7a.1']):
+    #TODO add parameter to overwrite data in the database
+    is_new, F_id=add_function_NF(F, my_cursor, log_file=log_file)
+    K = F.base_ring()
+    K, phi = normalize_field_NF(K)
+    bool, base_field_label = lmfdb_field_label_NF(K)
+    if is_new:
+        add_citations_NF(F_id, citations, my_cursor, log_file=log_file)
+        add_is_pcf(my_cursor, F_id,'original', bool_add_field=True, log_file=log_file)
+        add_critical_portrait(F_id, my_cursor, 'original', log_file=log_file)
+        add_automorphism_group_NF(F_id, my_cursor, 'original', log_file=log_file)
+        add_rational_preperiodic_points_NF(F_id, my_cursor, field_label=base_field_label, log_file=log_file)
         add_reduced_model_NF(F_id, my_cursor, log_file=log_file)
-    add_is_polynomial_NF(F_id, my_cursor, log_file=log_file)
-    add_monic_centered_model_NF(F_id, my_cursor, log_file=log_file)
-    add_chebyshev_model_NF(F_id, my_cursor, log_file=log_file)
-    add_newton_model_NF(F_id, my_cursor, log_file=log_file)
-    add_is_lattes_NF(F_id, my_cursor, log_file=log_file)
-    choose_display_model(F_id, my_cursor, log_file=log_file)
-    add_families_NF(F_id, my_cursor, log_file=log_file)
+        add_is_polynomial_NF(F_id, my_cursor, log_file=log_file)
+        add_monic_centered_model_NF(F_id, my_cursor, log_file=log_file)
+        add_chebyshev_model_NF(F_id, my_cursor, log_file=log_file)
+        add_newton_model_NF(F_id, my_cursor, log_file=log_file)
+        add_is_lattes_NF(F_id, my_cursor, log_file=log_file)
+        choose_display_model(F_id, my_cursor, log_file=log_file)
+        add_families_NF(F_id, my_cursor, log_file=log_file)
+    else:
+        add_rational_preperiodic_points_NF(F_id, my_cursor, field_label=base_field_label, log_file=log_file)
 
     return F_id
 

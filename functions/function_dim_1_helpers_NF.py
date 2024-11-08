@@ -1479,6 +1479,7 @@ def add_function_all_NF(F, my_cursor, citations=[], log_file=sys.stdout):
     """
     add all entries for one dynamical system
     """
+    #TODO add parameter to overwrite data in the database
     is_new, F_id=add_function_NF(F, my_cursor, log_file=log_file)
     K = F.base_ring()
     K, phi = normalize_field_NF(K)
@@ -1489,11 +1490,7 @@ def add_function_all_NF(F, my_cursor, citations=[], log_file=sys.stdout):
         add_critical_portrait(F_id, my_cursor, 'original', log_file=log_file)
         add_automorphism_group_NF(F_id, my_cursor, 'original', log_file=log_file)
         add_rational_preperiodic_points_NF(F_id, my_cursor, field_label=base_field_label, log_file=log_file)
-        #TODO: need to fix these
-        if (F.base_ring().degree() == 1) and (F_id not in ['1.2.c8ddd2a7.1', '1.2.611af5d0.1', '1.2.7cb63904.1',\
-            '1.2.0d94343e.1','1.2.beb83dd2.1','1.2.dd6fd9ae.1','1.2.4994c36e.1',\
-            '1.2.98d76bdd.1', '1.3.423d4b7a.1']):
-            add_reduced_model_NF(F_id, my_cursor, log_file=log_file)
+        add_reduced_model_NF(F_id, my_cursor, log_file=log_file)
         add_is_polynomial_NF(F_id, my_cursor, log_file=log_file)
         add_monic_centered_model_NF(F_id, my_cursor, log_file=log_file)
         add_chebyshev_model_NF(F_id, my_cursor, log_file=log_file)

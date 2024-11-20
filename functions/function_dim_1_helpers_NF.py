@@ -595,6 +595,15 @@ def identify_graph(G, f, my_cursor, type, log_file=sys.stdout):
     f is the fuction
     """
     graph_data = {}
+    if len(G.vertices()) == 0:
+        graph_data['cardinality'] = 0
+        graph_data['preperiodic_components'] = []
+        graph_data['num_components'] = 0
+        graph_data['positive_in_degree'] = 0
+        graph_data['periodic_cardinality'] = 0
+        graph_data['periodic_cycles'] = []
+        graph_data['max_tail'] = 0
+        graph_data['edges'] = []
     graph_data['cardinality'] = len(G.vertices())
     graph_data['preperiodic_components'] = G.connected_components_sizes()
     graph_data['num_components'] = len(G.connected_components())
@@ -646,7 +655,8 @@ def identify_graph(G, f, my_cursor, type, log_file=sys.stdout):
             return row['graph_id']
     # the graph is not in the table, so add it
     # edges relabels to graph verticies so this has to be done last
-    graph_data['edges'] = graph_to_array(G)
+    if len(G.vertices()) != 0:
+        graph_data['edges'] = graph_to_array(G)
     graph_data['type'] = type
     my_cursor.execute("""INSERT INTO graphs_dim_1_NF
         (cardinality, edges, num_components, periodic_cycles,

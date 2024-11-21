@@ -1484,32 +1484,40 @@ def add_families_NF(function_id, my_cursor, log_file=sys.stdout):
             WHERE function_id=%s
             """,[families, function_id])
 
-
-def add_function_all_NF(F, my_cursor, citations=[], log_file=sys.stdout):
+def add_function_all_NF(F, my_cursor, citations=[], log_file=sys.stdout, timeout = None):
     """
     add all entries for one dynamical system
     """
     #TODO add parameter to overwrite data in the database
-    is_new, F_id=add_function_NF(F, my_cursor, log_file=log_file)
-    K = F.base_ring()
-    K, phi = normalize_field_NF(K)
-    bool, base_field_label = lmfdb_field_label_NF(K)
-    if is_new:
-        add_citations_NF(F_id, citations, my_cursor, log_file=log_file)
-        add_is_pcf(my_cursor, F_id,'original', bool_add_field=True, log_file=log_file)
-        add_critical_portrait(F_id, my_cursor, 'original', log_file=log_file)
-        add_automorphism_group_NF(F_id, my_cursor, 'original', log_file=log_file)
-        add_rational_preperiodic_points_NF(F_id, my_cursor, field_label=base_field_label, log_file=log_file)
-        add_reduced_model_NF(F_id, my_cursor, log_file=log_file)
-        add_is_polynomial_NF(F_id, my_cursor, log_file=log_file)
-        add_monic_centered_model_NF(F_id, my_cursor, log_file=log_file)
-        add_chebyshev_model_NF(F_id, my_cursor, log_file=log_file)
-        add_newton_model_NF(F_id, my_cursor, log_file=log_file)
-        add_is_lattes_NF(F_id, my_cursor, log_file=log_file)
-        choose_display_model(F_id, my_cursor, log_file=log_file)
-        add_families_NF(F_id, my_cursor, log_file=log_file)
-    else:
-        add_rational_preperiodic_points_NF(F_id, my_cursor, field_label=base_field_label, log_file=log_file)
+    try:
+        if timeout is not None and timeout > 0:
+            alarm(timeout)  #start timeout if defined
 
-    return F_id
+        is_new, F_id = add_function_NF(F, my_cursor, log_file=log_file)
+        K = F.base_ring()
+        K, phi = normalize_field_NF(K)
+        bool, base_field_label = lmfdb_field_label_NF(K)
+        
+        if is_new:
+            add_citations_NF(F_id, citations, my_cursor, log_file=log_file)
+            add_is_pcf(my_cursor, F_id, 'original', bool_add_field=True, log_file=log_file)
+            add_critical_portrait(F_id, my_cursor, 'original', log_file=log_file)
+            add_automorphism_group_NF(F_id, my_cursor, 'original', log_file=log_file)
+            add_rational_preperiodic_points_NF(F_id, my_cursor, field_label=base_field_label, log_file=log_file)
+            add_reduced_model_NF(F_id, my_cursor, log_file=log_file)
+            add_is_polynomial_NF(F_id, my_cursor, log_file=log_file)
+            add_monic_centered_model_NF(F_id, my_cursor, log_file=log_file)
+            add_chebyshev_model_NF(F_id, my_cursor, log_file=log_file)
+            add_newton_model_NF(F_id, my_cursor, log_file=log_file)
+            add_is_lattes_NF(F_id, my_cursor, log_file=log_file)
+            choose_display_model(F_id, my_cursor, log_file=log_file)
+            add_families_NF(F_id, my_cursor, log_file=log_file)
+        else:
+            add_rational_preperiodic_points_NF(F_id, my_cursor, field_label=base_field_label, log_file=log_file)
 
+        cancel_alarm()
+        return F_id
+
+    except AlarmInterrupt:
+        log_file.write(f"Timeout: add_function_all_NF exceeded {timeout} seconds for function {F}.\n")
+        raise

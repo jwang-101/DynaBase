@@ -1507,7 +1507,7 @@ def add_function_all_NF(F, my_cursor, citations=[], log_file=sys.stdout, timeout
         add_monic_centered_model_NF(F_id, my_cursor, log_file=log_file, timeout=timeout) #has timeout
         add_chebyshev_model_NF(F_id, my_cursor, log_file=log_file, timeout=timeout) #has timeout
         add_newton_model_NF(F_id, my_cursor, log_file=log_file, timeout=timeout) #has timeout
-        add_is_lattes_NF(F_id, my_cursor, log_file=log_file, timeout=timeout, timeout=timeout) #has timeout
+        add_is_lattes_NF(F_id, my_cursor, log_file=log_file, timeout=timeout) #has timeout
         choose_display_model(F_id, my_cursor, log_file=log_file)
         add_families_NF(F_id, my_cursor, log_file=log_file)
     else:

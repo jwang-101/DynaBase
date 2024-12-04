@@ -132,7 +132,8 @@ def model_in_database_NF(F, my_cursor, sigma_1=None, conj_fns=None, log_file=sys
     F_coeffs = [get_coefficients(g) for g in F]
     bool, K_id = lmfdb_field_label_NF(F.base_ring(), log_file=log_file)
     if not bool:
-        return 0, '0'
+        log_file.write('model' + str(F) + 'base field not found in LMFDB')
+        raise ValueError('base field not found in LMFDB')
     for g in conj_fns:
         for i in range(5):
             if g[2*i+1] == F_coeffs and g[2*i+2] == str(K_id):
@@ -253,7 +254,7 @@ def conj_in_database_NF(F, my_cursor, conj_fns=None, log_file=sys.stdout, timeou
 
     bool, g_id = model_in_database_NF(F, my_cursor, conj_fns=conj_fns, log_file=log_file)
     if bool:
-        return 1, g_id
+        return 1, g_id 
 
     #now check for twists/conjugates
     #sigma_2
@@ -1484,32 +1485,32 @@ def add_families_NF(function_id, my_cursor, log_file=sys.stdout):
             WHERE function_id=%s
             """,[families, function_id])
 
-
-def add_function_all_NF(F, my_cursor, citations=[], log_file=sys.stdout):
+def add_function_all_NF(F, my_cursor, citations=[], log_file=sys.stdout, timeout=30):
     """
     add all entries for one dynamical system
     """
     #TODO add parameter to overwrite data in the database
-    is_new, F_id=add_function_NF(F, my_cursor, log_file=log_file)
+
+    is_new, F_id = add_function_NF(F, my_cursor, log_file=log_file, timeout=timeout) #has timeout
     K = F.base_ring()
     K, phi = normalize_field_NF(K)
     bool, base_field_label = lmfdb_field_label_NF(K)
+    
     if is_new:
         add_citations_NF(F_id, citations, my_cursor, log_file=log_file)
-        add_is_pcf(my_cursor, F_id,'original', bool_add_field=True, log_file=log_file)
-        add_critical_portrait(F_id, my_cursor, 'original', log_file=log_file)
-        add_automorphism_group_NF(F_id, my_cursor, 'original', log_file=log_file)
-        add_rational_preperiodic_points_NF(F_id, my_cursor, field_label=base_field_label, log_file=log_file)
-        add_reduced_model_NF(F_id, my_cursor, log_file=log_file)
-        add_is_polynomial_NF(F_id, my_cursor, log_file=log_file)
-        add_monic_centered_model_NF(F_id, my_cursor, log_file=log_file)
-        add_chebyshev_model_NF(F_id, my_cursor, log_file=log_file)
-        add_newton_model_NF(F_id, my_cursor, log_file=log_file)
-        add_is_lattes_NF(F_id, my_cursor, log_file=log_file)
+        add_is_pcf(my_cursor, F_id, 'original', bool_add_field=True, log_file=log_file, timeout=timeout) #has timeout
+        add_critical_portrait(F_id, my_cursor, 'original', log_file=log_file, timeout=timeout) #has timeout
+        add_automorphism_group_NF(F_id, my_cursor, 'original', log_file=log_file, timeout=timeout) #has timeout
+        add_rational_preperiodic_points_NF(F_id, my_cursor, field_label=base_field_label, log_file=log_file, timeout=timeout) #has timeout 
+        add_reduced_model_NF(F_id, my_cursor, log_file=log_file, timeout=timeout) #has timeout
+        add_is_polynomial_NF(F_id, my_cursor, log_file=log_file, timeout=timeout) #has timeout
+        add_monic_centered_model_NF(F_id, my_cursor, log_file=log_file, timeout=timeout) #has timeout
+        add_chebyshev_model_NF(F_id, my_cursor, log_file=log_file, timeout=timeout) #has timeout
+        add_newton_model_NF(F_id, my_cursor, log_file=log_file, timeout=timeout) #has timeout
+        add_is_lattes_NF(F_id, my_cursor, log_file=log_file, timeout=timeout) #has timeout
         choose_display_model(F_id, my_cursor, log_file=log_file)
         add_families_NF(F_id, my_cursor, log_file=log_file)
     else:
-        add_rational_preperiodic_points_NF(F_id, my_cursor, field_label=base_field_label, log_file=log_file)
+        add_rational_preperiodic_points_NF(F_id, my_cursor, field_label=base_field_label, log_file=log_file, timeout=timeout) #has timeout
 
     return F_id
-

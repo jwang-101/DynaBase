@@ -421,6 +421,11 @@ def add_function_NF(F, my_cursor, bool_add_field=False, log_file=sys.stdout, tim
         RETURNING function_id """,f)
     F_id = my_cursor.fetchone()[0]
     f['function_id'] = F_id
+    if my_cursor.rowcount == 0: #error check rowcount after insert
+        log_file.write('add_function_NF failure: ' + str(F_id) + ' not inserted \n')
+        raise ValueError('add_function_NF insert failure on ' + str(F))
+    else:
+        log_file.write('add_function_NF: ' + str(F_id) + ' successfully inserted \n') 
     log_file.write('inserted: ' + str(list(F)) + ' as ' + str(F_id) + '\n')
 
     if found == 2:
@@ -689,6 +694,10 @@ def identify_graph(G, f, my_cursor, type, log_file=sys.stdout):
         %(periodic_cardinality)s, %(preperiodic_components)s, %(positive_in_degree)s,
         %(max_tail)s, %(type)s)
         RETURNING graph_id """, graph_data)
+    if my_cursor.rowcount == 0: #error check rowcount after insert
+        log_file.write('identify_graph failure: ' + str(graph_data['edges']) + ' not inserted \n')
+    else:
+        log_file.write('identify_graph: ' + str(graph_data['edges']) + ' successfully inserted \n') 
     log_file.write('adding preperiodic graph to table: ' + str(graph_data['edges']) + '\n')
     return my_cursor.fetchone()[0]
 
@@ -767,7 +776,10 @@ def add_rational_preperiodic_points_NF(function_id, my_cursor, model_name='origi
             VALUES
             (%(function_id)s, %(base_field_label)s, %(rational_periodic_points)s, %(graph_id)s)
             RETURNING id """,preperiodic_data)
-
+        if my_cursor.rowcount == 0: #error check rowcount after insert
+            log_file.write('add_rational_preperiodic_points_NF failure: ' + str(function_id) + ' not inserted \n')
+        else:
+            log_file.write('add_rational_preperiodic_points_NF: ' + str(function_id) + ' successfully inserted \n') 
         #TODO check rowcount for success
         log_file.write('rational preperiodic points computed for:' + str(function_id) + '\n')
         cancel_alarm()

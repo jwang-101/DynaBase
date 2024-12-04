@@ -596,7 +596,6 @@ def add_automorphism_group_NF(function_id, my_cursor, model_name='original', log
             log_file.write('add_automorphism_group_NF failure: ' + str(function_id) + ' not updated \n')
         else:
             log_file.write('add_automorphism_group_NF: ' + str(function_id) + ' successfully updated \n') 
-        #TODO check rowcount for success
         cancel_alarm()
         log_file.write('aut group computed for:' + str(function_id) + '\n')
         return True
@@ -780,7 +779,6 @@ def add_rational_preperiodic_points_NF(function_id, my_cursor, model_name='origi
             log_file.write('add_rational_preperiodic_points_NF failure: ' + str(function_id) + ' not inserted \n')
         else:
             log_file.write('add_rational_preperiodic_points_NF: ' + str(function_id) + ' successfully inserted \n') 
-        #TODO check rowcount for success
         log_file.write('rational preperiodic points computed for:' + str(function_id) + '\n')
         cancel_alarm()
         return True
@@ -868,7 +866,6 @@ def add_reduced_model_NF(function_id, my_cursor, model_name='original', log_file
             log_file.write('add_reduced_model_NF: ' + str(function_id) + ' successfully updated \n') 
         log_file.write('reduced model computed: ' + str(function_id) + '\n')
         cancel_alarm()
-        #TODO check rowcount
         return True
 
     except AlarmInterrupt:
@@ -900,7 +897,6 @@ def add_is_polynomial_NF(function_id, my_cursor, model_name='original', log_file
             SET is_polynomial = %(is_polynomial)s
             WHERE function_id=%(function_id)s
             """,query)
-        #TODO check rowcount for success
         if my_cursor.rowcount == 0: #error check rowcount after update
             log_file.write('add_is_polynomial_NF failure: ' + str(function_id) + ' not updated \n')
         else:
@@ -1050,7 +1046,6 @@ def add_chebyshev_model_NF(function_id, my_cursor, model_name='original', log_fi
             WHERE
                 function_id = %(function_id)s
             """, query)
-        #TODO check rowcount
         if my_cursor.rowcount == 0: #error check rowcount after update
             log_file.write('add_chebyshev_model_NF failure: ' + str(function_id) + ' not updated \n')
         else:
@@ -1073,7 +1068,6 @@ def add_chebyshev_model_NF(function_id, my_cursor, model_name='original', log_fi
             WHERE
                 function_id = %(function_id)s
             """, query)
-        #TODO check rowcount
         if my_cursor.rowcount == 0: #error check rowcount after update
             log_file.write('add_chebyshev_model_NF failure: ' + str(function_id) + ' not updated \n')
         else:
@@ -1120,7 +1114,6 @@ def add_chebyshev_model_NF(function_id, my_cursor, model_name='original', log_fi
             WHERE
                 function_id = %(function_id)s
             """, query)
-            #TODO check rowcount
             if my_cursor.rowcount == 0: #error check rowcount after update
                 log_file.write('add_chebyshev_model_NF failure: ' + str(function_id) + ' not updated \n')
             else:
@@ -1179,7 +1172,6 @@ def add_chebyshev_model_NF(function_id, my_cursor, model_name='original', log_fi
         else:
             log_file.write('add_chebyshev_model_NF: ' + str(function_id) + ' successfully updated \n')   
         log_file.write('chebyshev model done for:' + str(function_id) + '\n')
-        #TODO check rowcount
         return True
 
 
@@ -1225,7 +1217,6 @@ def add_newton_model_NF(function_id, my_cursor, model_name='original', log_file=
                 WHERE
                     function_id = %(function_id)s
                 """, query)
-            #TODO check rowcount
             if my_cursor.rowcount == 0: #error check rowcount after update
                 log_file.write('add_newton_model_NF failure: ' + str(function_id) + ' not updated \n')
             else:
@@ -1317,7 +1308,6 @@ def add_newton_model_NF(function_id, my_cursor, model_name='original', log_file=
         else:
             log_file.write('add_newton_model_NF: ' + str(function_id) + ' successfully updated \n')   
         log_file.write('newton model done for:' + str(function_id) + '\n')
-        #TODO check rowcount
         return True
 
     except AlarmInterrupt:
@@ -1354,7 +1344,6 @@ def add_is_lattes_NF(function_id, my_cursor, model_name='original', log_file=sys
             WHERE
                 function_id = %(function_id)s
             """, query)
-        #TODO check rowcount
         if my_cursor.rowcount == 0: #error check rowcount after update
             log_file.write('add_is_lattes_NF failure: ' + str(function_id) + ' not updated \n')
         else:
@@ -1412,7 +1401,6 @@ def add_is_lattes_NF(function_id, my_cursor, model_name='original', log_file=sys
             """, query)
         log_file.write('is lattes complete for ' + str(function_id) + '\n')
         cancel_alarm()
-        #TODO check rowcount
         if my_cursor.rowcount == 0: #error check rowcount after update
             log_file.write('add_is_lattes_NF failure: ' + str(function_id) + ' not updated \n')
         else:
